@@ -1,0 +1,197 @@
+2026-04-29 12:17:50 [INFO] Running initial sync on startup...
+2026-04-29 12:17:50 [INFO] ============================================================
+2026-04-29 12:17:50 [INFO] Starting company sync job
+2026-04-29 12:17:50 [INFO] DB has 320 companies. Resuming from page 32.
+2026-04-29 12:17:50 [WARNING] Page 32 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=32
+2026-04-29 12:17:50 [WARNING] Skipping page 32 due to fetch error.
+2026-04-29 12:17:51 [WARNING] Page 33 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=33
+2026-04-29 12:17:51 [WARNING] Skipping page 33 due to fetch error.
+2026-04-29 12:17:51 [WARNING] Page 34 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=34
+2026-04-29 12:17:51 [WARNING] Skipping page 34 due to fetch error.
+2026-04-29 12:17:51 [WARNING] Page 35 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=35
+2026-04-29 12:17:51 [WARNING] Skipping page 35 due to fetch error.
+2026-04-29 12:17:52 [WARNING] Page 36 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=36
+2026-04-29 12:17:52 [WARNING] Skipping page 36 due to fetch error.
+2026-04-29 12:17:52 [WARNING] Page 37 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=37
+2026-04-29 12:17:52 [WARNING] Skipping page 37 due to fetch error.
+2026-04-29 12:17:52 [WARNING] Page 38 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=38
+2026-04-29 12:17:52 [WARNING] Skipping page 38 due to fetch error.
+2026-04-29 12:17:53 [WARNING] Page 39 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=39
+2026-04-29 12:17:53 [WARNING] Skipping page 39 due to fetch error.
+2026-04-29 12:17:53 [WARNING] Page 40 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=40
+2026-04-29 12:17:53 [WARNING] Skipping page 40 due to fetch error.
+2026-04-29 12:17:54 [WARNING] Page 41 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=41
+2026-04-29 12:17:54 [WARNING] Skipping page 41 due to fetch error.
+2026-04-29 12:17:54 [WARNING] Page 42 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=42
+2026-04-29 12:17:54 [WARNING] Skipping page 42 due to fetch error.
+2026-04-29 12:17:54 [WARNING] Page 43 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=43
+2026-04-29 12:17:54 [WARNING] Skipping page 43 due to fetch error.
+2026-04-29 12:17:55 [WARNING] Page 44 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=44
+2026-04-29 12:17:55 [WARNING] Skipping page 44 due to fetch error.
+2026-04-29 12:17:55 [WARNING] Page 45 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=45
+2026-04-29 12:17:55 [WARNING] Skipping page 45 due to fetch error.
+2026-04-29 12:17:55 [WARNING] Page 46 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=46
+2026-04-29 12:17:55 [WARNING] Skipping page 46 due to fetch error.
+2026-04-29 12:17:56 [WARNING] Page 47 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=47
+2026-04-29 12:17:56 [WARNING] Skipping page 47 due to fetch error.
+2026-04-29 12:17:56 [WARNING] Page 48 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=48
+2026-04-29 12:17:56 [WARNING] Skipping page 48 due to fetch error.
+2026-04-29 12:17:56 [WARNING] Page 49 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=49
+2026-04-29 12:17:56 [WARNING] Skipping page 49 due to fetch error.
+2026-04-29 12:17:57 [WARNING] Page 50 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=50
+2026-04-29 12:17:57 [WARNING] Skipping page 50 due to fetch error.
+2026-04-29 12:17:57 [WARNING] Page 51 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=51
+2026-04-29 12:17:57 [WARNING] Skipping page 51 due to fetch error.
+2026-04-29 12:17:58 [WARNING] Page 52 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=52
+2026-04-29 12:17:58 [WARNING] Skipping page 52 due to fetch error.
+2026-04-29 12:17:58 [WARNING] Page 53 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=53
+2026-04-29 12:17:58 [WARNING] Skipping page 53 due to fetch error.
+2026-04-29 12:17:59 [WARNING] Page 54 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=54
+2026-04-29 12:17:59 [WARNING] Skipping page 54 due to fetch error.
+2026-04-29 12:17:59 [WARNING] Page 55 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=55
+2026-04-29 12:17:59 [WARNING] Skipping page 55 due to fetch error.
+2026-04-29 12:17:59 [WARNING] Page 56 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=56
+2026-04-29 12:17:59 [WARNING] Skipping page 56 due to fetch error.
+2026-04-29 12:18:00 [WARNING] Page 57 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=57
+2026-04-29 12:18:00 [WARNING] Skipping page 57 due to fetch error.
+2026-04-29 12:18:00 [WARNING] Page 58 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=58
+2026-04-29 12:18:00 [WARNING] Skipping page 58 due to fetch error.
+2026-04-29 12:18:00 [WARNING] Page 59 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=59
+2026-04-29 12:18:00 [WARNING] Skipping page 59 due to fetch error.
+2026-04-29 12:18:01 [WARNING] Page 60 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=60
+2026-04-29 12:18:01 [WARNING] Skipping page 60 due to fetch error.
+2026-04-29 12:18:01 [WARNING] Page 61 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=61
+2026-04-29 12:18:01 [WARNING] Skipping page 61 due to fetch error.
+2026-04-29 12:18:01 [WARNING] Page 62 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=62
+2026-04-29 12:18:01 [WARNING] Skipping page 62 due to fetch error.
+2026-04-29 12:18:02 [WARNING] Page 63 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=63
+2026-04-29 12:18:02 [WARNING] Skipping page 63 due to fetch error.
+2026-04-29 12:18:02 [WARNING] Page 64 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=64
+2026-04-29 12:18:02 [WARNING] Skipping page 64 due to fetch error.
+2026-04-29 12:18:02 [INFO] Shutdown signal received. Stopping scheduler...
+2026-04-29 12:20:20 [INFO] Running initial sync on startup...
+2026-04-29 12:20:20 [INFO] ============================================================
+2026-04-29 12:20:20 [INFO] Starting company sync job
+2026-04-29 12:20:20 [INFO] DB has 320 companies. Resuming from page 32.
+2026-04-29 12:20:21 [WARNING] Page 32 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=32
+2026-04-29 12:20:21 [WARNING] Skipping page 32 due to fetch error.
+2026-04-29 12:20:21 [WARNING] Page 33 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=33
+2026-04-29 12:20:21 [WARNING] Skipping page 33 due to fetch error.
+2026-04-29 12:20:21 [WARNING] Page 34 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=34
+2026-04-29 12:20:21 [WARNING] Skipping page 34 due to fetch error.
+2026-04-29 12:20:22 [WARNING] Page 35 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=35
+2026-04-29 12:20:22 [WARNING] Skipping page 35 due to fetch error.
+2026-04-29 12:20:22 [WARNING] Page 36 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=36
+2026-04-29 12:20:22 [WARNING] Skipping page 36 due to fetch error.
+2026-04-29 12:20:22 [WARNING] Page 37 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=37
+2026-04-29 12:20:22 [WARNING] Skipping page 37 due to fetch error.
+2026-04-29 12:20:23 [WARNING] Page 38 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=38
+2026-04-29 12:20:23 [WARNING] Skipping page 38 due to fetch error.
+2026-04-29 12:20:23 [WARNING] Page 39 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=39
+2026-04-29 12:20:23 [WARNING] Skipping page 39 due to fetch error.
+2026-04-29 12:20:23 [WARNING] Page 40 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=40
+2026-04-29 12:20:23 [WARNING] Skipping page 40 due to fetch error.
+2026-04-29 12:20:24 [WARNING] Page 41 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=41
+2026-04-29 12:20:24 [WARNING] Skipping page 41 due to fetch error.
+2026-04-29 12:20:24 [WARNING] Page 42 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=42
+2026-04-29 12:20:24 [WARNING] Skipping page 42 due to fetch error.
+2026-04-29 12:20:25 [WARNING] Page 43 fetch error: 404 Client Error: Not Found for url: https://equifizapis.cmots.com/api?PageNo=43
+2026-04-29 12:20:25 [WARNING] Skipping page 43 due to fetch error.
+2026-04-29 12:20:25 [INFO] Shutdown signal received. Stopping scheduler...
+2026-04-29 12:21:58 [INFO] Running initial sync on startup...
+2026-04-29 12:21:58 [INFO] ============================================================
+2026-04-29 12:21:58 [INFO] Starting company sync job
+2026-04-29 12:21:58 [INFO] DB has 320 companies. Resuming from page 32.
+2026-04-29 12:22:01 [INFO] Page    32 | +6153 rows | DB total: 6153 | New: 5833
+2026-04-29 12:22:05 [INFO] Shutdown signal received. Stopping scheduler...
+2026-04-29 12:23:33 [INFO] Running initial sync on startup...
+2026-04-29 12:23:33 [INFO] ============================================================
+2026-04-29 12:23:33 [INFO] Starting company sync job
+2026-04-29 12:23:33 [INFO] DB has 0 companies. Resuming from page 1.
+2026-04-29 12:23:36 [INFO] Page     1 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:23:38 [INFO] Page     2 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:23:39 [INFO] Page     3 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:23:41 [INFO] Page     4 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:23:43 [INFO] Page     5 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:23:46 [INFO] Page     6 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:23:48 [INFO] Page     7 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:23:51 [INFO] Page     8 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:23:54 [INFO] Page     9 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:23:56 [INFO] Page    10 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:23:59 [INFO] Page    11 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:24:03 [INFO] Page    12 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:24:05 [INFO] Page    13 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:24:09 [INFO] Page    14 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:24:11 [INFO] Page    15 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:24:14 [INFO] Page    16 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:24:18 [INFO] Page    17 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:24:22 [INFO] Page    18 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:24:26 [INFO] Page    19 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:24:30 [INFO] Page    20 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:24:33 [INFO] Page    21 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:24:37 [INFO] Page    22 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:24:40 [INFO] Page    23 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:24:44 [INFO] Page    24 | +6153 rows | DB total: 6153 | New: 6153
+2026-04-29 12:24:45 [INFO] Shutdown signal received. Stopping scheduler...
+2026-04-29 12:25:02 [INFO] Running initial sync on startup...
+2026-04-29 12:25:02 [INFO] ============================================================
+2026-04-29 12:25:02 [INFO] Starting company sync job
+2026-04-29 12:25:02 [INFO] DB has 6153 companies. Resuming from page 615.
+2026-04-29 12:25:07 [INFO] Page   615 | +6153 rows | DB total: 6153 | New: 0
+2026-04-29 12:25:16 [INFO] Page   616 | +6153 rows | DB total: 6153 | New: 0
+2026-04-29 12:25:27 [INFO] Page   617 | +6153 rows | DB total: 6153 | New: 0
+2026-04-29 12:25:37 [INFO] Page   618 | +6153 rows | DB total: 6153 | New: 0
+2026-04-29 12:25:41 [INFO] Shutdown signal received. Stopping scheduler...
+2026-04-29 12:29:43 [INFO] Running initial sync on startup...
+2026-04-29 12:29:43 [INFO] ============================================================
+2026-04-29 12:29:43 [INFO] Starting company sync
+2026-04-29 12:29:43 [INFO] Fetching all companies from API...
+2026-04-29 12:29:51 [INFO] API returned 6153 records.
+2026-04-29 12:29:52 [INFO] Upserted 6153 rows | DB total: 6153 | New: 0
+2026-04-29 12:29:52 [INFO] Sync complete in 9.22s
+2026-04-29 12:29:52 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-04-29 12:29:52 [INFO] Scheduler running — syncs at [0, 6, 12, 18] (hours) Asia/Kolkata
+2026-04-29 12:29:52 [INFO] Press Ctrl+C to stop.
+2026-04-29 12:29:52 [INFO] Added job "Company sync 4x daily" to job store "default"
+2026-04-29 12:29:52 [INFO] Scheduler started
+2026-04-29 12:44:58 [INFO] Shutdown signal received. Exiting.
+2026-04-29 12:45:00 [INFO] Running initial sync on startup...
+2026-04-29 12:45:00 [INFO] ============================================================
+2026-04-29 12:45:00 [INFO] Starting company sync
+2026-04-29 12:45:00 [INFO] Fetching all companies from API...
+2026-04-29 12:45:03 [INFO] API returned 6153 records.
+2026-04-29 12:45:04 [INFO] Upserted 6153 rows | DB total: 6153 | New: 0
+2026-04-29 12:45:04 [INFO] Sync complete in 3.9s
+2026-04-29 12:46:00 [INFO] Running initial sync on startup...
+2026-04-29 12:46:00 [INFO] ============================================================
+2026-04-29 12:46:00 [INFO] Starting company sync
+2026-04-29 12:46:00 [INFO] Fetching all companies from API...
+2026-04-29 12:46:03 [INFO] API returned 6153 records.
+2026-04-29 12:46:03 [INFO] Upserted 6153 rows | DB total: 6153 | New: 0
+2026-04-29 12:46:03 [INFO] Sync complete in 2.9s
+2026-04-29 12:46:03 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-04-29 12:46:03 [INFO] Scheduler running — syncs at [0, 6, 13, 18] (hours) Asia/Kolkata
+2026-04-29 12:46:03 [INFO] Press Ctrl+C to stop.
+2026-04-29 12:46:03 [INFO] Added job "Company sync 4x daily" to job store "default"
+2026-04-29 12:46:03 [INFO] Scheduler started
+2026-04-29 13:00:00 [INFO] Running job "Company sync 4x daily (trigger: cron[hour='0,6,13,18', minute='0'], next run at: 2026-04-29 18:00:00 IST)" (scheduled at 2026-04-29 13:00:00+05:30)
+2026-04-29 13:00:00 [INFO] ============================================================
+2026-04-29 13:00:00 [INFO] Starting company sync
+2026-04-29 13:00:00 [INFO] Fetching all companies from API...
+2026-04-29 13:00:13 [INFO] API returned 6153 records.
+2026-04-29 13:00:13 [INFO] Upserted 6153 rows | DB total: 6153 | New: 0
+2026-04-29 13:00:13 [INFO] Sync complete in 13.98s
+2026-04-29 13:00:13 [INFO] Job "Company sync 4x daily (trigger: cron[hour='0,6,13,18', minute='0'], next run at: 2026-04-29 18:00:00 IST)" executed successfully
+2026-04-29 13:00:27 [INFO] Shutdown signal received. Exiting.
+2026-04-29 13:04:41 [INFO] Running initial sync on startup...
+2026-04-29 13:04:41 [INFO] ============================================================
+2026-04-29 13:04:41 [INFO] Starting company sync
+2026-04-29 13:04:41 [INFO] Fetching all companies from API...
+2026-04-29 13:04:47 [INFO] API returned 6153 records.
+2026-04-29 13:04:47 [INFO] Upserted 6153 rows | DB total: 6153 | New: 6153
+2026-04-29 13:04:47 [INFO] Sync complete in 6.69s
+2026-04-29 13:04:47 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-04-29 13:04:47 [INFO] Scheduler running — syncs at [0, 6, 12, 18] (hours) Asia/Kolkata
+2026-04-29 13:04:47 [INFO] Press Ctrl+C to stop.
+2026-04-29 13:04:47 [INFO] Added job "Company sync 4x daily" to job store "default"
+2026-04-29 13:04:47 [INFO] Scheduler started
