@@ -1,31 +1,32 @@
 """
-graph.py – EQUIFIZ Financial AI Agent (v5.2)
+graph.py – EQUIFIZ Financial AI Agent (v5)
 
-Key changes from v5.1
-───────────────────────
-1. TOOL-DRIVEN PARAMETER RESOLUTION — node_mcp_pre_resolve now uses a
-   TOOL_REQUIRED_PARAMS registry to look up EXACTLY which parameters each
-   MCP tool needs, keyed by mcp_tool_hint (set in Node A). This eliminates
-   the bug where co_code from symbol_resolution polluted MCP calls that
-   needed mf_cocode instead.
+Key changes from v4
+───────────────────
+1. ASYNCIO FIX — nest_asyncio.apply() is called at module load so that
+   uvicorn's running event loop does not conflict with asyncio.run() calls
+   inside thread pools.  node_mcp_tool_call now uses
+   loop.run_until_complete() on a freshly-created event loop that is
+   executed in a single background thread, completely avoiding the
+   "unhandled errors in a TaskGroup" crash.
 
-2. CO_CODE CARRY-FORWARD GUARD — co_code is only carried into
-   mcp_resolved_codes if the target tool actually requires co_code. If the
-   tool requires mf_cocode/mf_schcode, co_code is intentionally excluded.
+2. EARLY-EXIT on "not found" — if the very first (and only) data-tool
+   result contains a "not found" / "unavailable" signal, the MCP synthesis
+   path returns a clean user-facing message instead of re-entering the LLM
+   loop and hanging.
 
-3. NO-PARAM TOOLS PASS-THROUGH — Tools that require no DB codes (e.g.,
-   get_new_fund_offers, get_mf_market_activity) skip DB resolution entirely
-   and let the MCP server answer from the query text alone.
+3. TIMEOUT hardening — the background thread used for the MCP call has a
+   120-second hard timeout.  A TimeoutError is caught and returned as a
+   clean error string rather than propagating an unhandled exception.
 
-4. MCP PATH SKIPS SYMBOL RESOLUTION — When mcp_needed=True and the query
-   is about a mutual fund / AMC (not a stock), symbol_resolution is bypassed
-   to prevent spurious co_code assignment. Route is: classify → mcp_pre_resolve
-   directly when query_type==company and mcp_needed==True.
+4. All v4 design decisions (mcp_pre_resolve, mcp_multi_pre_resolve,
+   code injection, resolver guard in mcp_client.py) are unchanged.
 
-5. All v5 design decisions (asyncio fix, early-exit, timeout hardening,
-   _targeted_db_lookup, _resolve_mf_codes_from_db) are unchanged.
+5. HIGH-PRECISION PARAMETER RESOLUTION (v5.1) — node_mcp_pre_resolve now
+   uses PARAM_TO_TABLE_MAP + _targeted_db_lookup for deterministic,
+   table-aware fuzzy resolution of mf_schcode, mf_cocode, and co_code.
 
-Pipeline design (v5.2)
+Pipeline design (unchanged from v4)
 ────────────────────────────────────
 Node A  : classify + extract
            Detects query_type, entity, intent, relevant_apis (2-3).
@@ -36,7 +37,7 @@ Node A  : classify + extract
            ├─ "general"     → general_handler → synthesis → END
            │
            ├─ "company"
-           │    ├─ mcp_needed=True  → mcp_pre_resolve (NO symbol_resolution)
+           │    ├─ mcp_needed=True  → symbol_resolution → mcp_pre_resolve
            │    │                     → mcp_tool_call → mcp_synthesis → END
            │    ├─ is_broad=False   → symbol_resolution → direct_api_fetch
            │    │                     → summarise_apis → synthesis → END
@@ -183,52 +184,6 @@ _MF_COCODE_TOOLS = {
 
 _CO_CODE_TOOLS = {
     "get_funds_holding_company",
-}
-
-# ── Tool → Required DB parameters registry ────────────────────────────────────
-#
-# This is the single source of truth for what each MCP tool needs.
-# Keys are tool names; values are lists of parameter names that must be
-# resolved from the DB before the tool is called.
-# An empty list means the tool can answer from the query text alone.
-#
-TOOL_REQUIRED_PARAMS: dict[str, list[str]] = {
-    # ── Scheme-level tools (need mf_schcode) ──
-    "get_scheme_nav":          ["mf_schcode"],
-    "get_investment_details":  ["mf_schcode"],
-    "get_expense_ratio":       ["mf_schcode"],
-    "get_avg_maturity":        ["mf_schcode"],
-    "get_scheme_aum":          ["mf_schcode"],
-    "get_nav_historical":      ["mf_schcode"],
-    "get_scheme_returns":      ["mf_schcode"],
-    "get_lumpsum_returns":     ["mf_schcode"],
-    "get_scheme_sip_details":  ["mf_schcode"],
-    "get_mf_holdings":         ["mf_schcode"],
-    "get_sector_allocation":   ["mf_schcode"],
-    "get_asset_allocation":    ["mf_schcode"],
-    "get_portfolio_changes":   ["mf_schcode"],
-    "get_mcap_allocation":     ["mf_schcode"],
-    "get_most_bought_sold":    ["mf_schcode"],
-    "get_scheme_ratios":       ["mf_schcode"],
-    "get_dividend_details":    ["mf_schcode"],
-    "get_bse_star_scheme":     ["mf_schcode"],
-
-    # ── AMC-level tools (need mf_cocode) ──
-    "get_fund_categories":     ["mf_cocode"],
-    "get_schemes_by_amc":      ["mf_cocode"],
-    "get_fund_profile":        ["mf_cocode"],
-
-    # ── Stock-level tools (need co_code) ──
-    "get_funds_holding_company": ["co_code"],
-
-    # ── No-param tools (server resolves from query text) ──
-    "get_new_fund_offers":     [],
-    "get_mf_market_activity":  [],
-    "get_fund_managers":       [],
-    "get_category_performance": [],
-    "get_fund_performance":    [],
-    "compare_schemes":         [],       # server handles multi-entity resolution
-    "search_mf_schemes":       [],       # semantic search, no numeric ID needed
 }
 
 # Phrases that indicate the MCP data tool returned nothing useful
@@ -455,9 +410,6 @@ Entity rules:
 - Resolve brand names: "Maggi" → "Nestle India", "Jio" → "Reliance Industries"
 - Use conversation history to resolve pronouns ("it", "the company", "them")
 - "additional_companies" is non-empty only for comparison/investment
-- For MF queries, extract amc_name (fund house) separately from scheme_name
-- If query is about an AMC's schemes (e.g. "what schemes does SBI MF provide"),
-  set amc_name="SBI Mutual Fund" and company_name=null
 
 API selection (relevant_apis — pick 2-3, ignored when is_broad=true or mcp_needed=true):
   pe_ratio / valuation  → ["daily_ratios", "key_ratios"]
@@ -506,20 +458,7 @@ def node_classify_and_extract(state: AgentState) -> AgentState:
         state["mcp_tool_hint"] = result.get("mcp_tool_hint", "")
 
         primary = result.get("primary") or {}
-
-        # ── v5.2: For MF/AMC queries, prefer amc_name or scheme_name as entity ──
-        # This prevents symbol_resolution from being misled by AMC names into
-        # resolving a stock co_code when we actually need mf_cocode.
-        if state["mcp_needed"]:
-            mcp_scheme = primary.get("scheme_name")
-            mcp_amc    = primary.get("amc_name")
-            # Entity = scheme name (for schcode tools) or AMC name (for cocode tools)
-            state["extracted_entity"] = (
-                mcp_scheme or mcp_amc or primary.get("company_name") or state["user_query"]
-            )
-        else:
-            state["extracted_entity"] = primary.get("company_name") or state["user_query"]
-
+        state["extracted_entity"] = primary.get("company_name") or state["user_query"]
         state["nse_symbol"]       = primary.get("nse_symbol")
         state["intent"]           = primary.get("intent", "daily_ratios")
         state["report_type"]      = primary.get("report_type", "s")
@@ -546,8 +485,7 @@ def node_classify_and_extract(state: AgentState) -> AgentState:
         console.print(
             f"  → type={state['query_type']} broad={state['is_broad']} "
             f"mcp={state['mcp_needed']} entity={state['extracted_entity']} "
-            f"tool_hint={state['mcp_tool_hint']} "
-            f"scheme={state.get('mcp_scheme_name')} amc={state.get('mcp_amc_name')}"
+            f"tool_hint={state['mcp_tool_hint']}"
         )
     except Exception as e:
         console.print(f"Classify+extract failed: {e} — defaulting to general")
@@ -644,14 +582,13 @@ def _targeted_db_lookup(
     For scheme_master, the full row is returned (including mf_cocode) so
     that the caller can also populate the parent AMC code in a single query.
 
-    Returns the best-matching row dict, or None if no match exceeds the 60
+    Returns the best-matching row dict, or None if no match exceeds the 70
     confidence threshold.
     """
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         console.print(f"🔍 [DB LOOKUP] Searching table '{table}' for entity: '{entity}'")
-
         # scheme_master gets a wider SELECT so mf_cocode is available to
         # the caller without a second round-trip.
         if table == "scheme_master":
@@ -702,6 +639,9 @@ def _resolve_mf_codes_from_db(
     """
     Resolve mf_cocode and mf_schcode from the local DB cache.
     Falls back through: scheme_name → amc_name → entity_name.
+
+    Kept for use by node_mcp_multi_pre_resolve which still needs a
+    self-contained resolution path per entity.
     """
     resolved: dict = {}
 
@@ -768,161 +708,86 @@ def _resolve_mf_codes_from_db(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# MCP Pre-Resolution Node  (v5.2 — tool-driven)
+# MCP Pre-Resolution Nodes
 # ═══════════════════════════════════════════════════════════════════════════════
-
-def _get_required_params_for_tool(tool_hint: str) -> Optional[list[str]]:
-    """
-    Return the list of DB parameters required by the given tool name.
-
-    Lookup order:
-      1. Exact match in TOOL_REQUIRED_PARAMS
-      2. Fallback: infer from legacy sets (_MF_SCHCODE_TOOLS, _MF_COCODE_TOOLS,
-         _CO_CODE_TOOLS) for any tool not yet in the registry
-      3. None → caller should attempt Chroma metadata as last resort
-
-    Returns [] for known no-param tools, list of param names otherwise,
-    or None if the tool is completely unknown.
-    """
-    if tool_hint in TOOL_REQUIRED_PARAMS:
-        return TOOL_REQUIRED_PARAMS[tool_hint]
-
-    # Legacy-set fallbacks
-    if tool_hint in _MF_SCHCODE_TOOLS:
-        return ["mf_schcode"]
-    if tool_hint in _MF_COCODE_TOOLS:
-        return ["mf_cocode"]
-    if tool_hint in _CO_CODE_TOOLS:
-        return ["co_code"]
-
-    return None  # unknown tool
 
 
 def node_mcp_pre_resolve(state: AgentState) -> AgentState:
     """
-    Tool-Driven Parameter Resolution (v5.2)
+    High-Precision Parameter Resolution (v5.1)
 
     Strategy
     ────────
-    1. Use mcp_tool_hint (set in Node A by the LLM) to look up EXACTLY which
-       DB parameters the target tool needs via TOOL_REQUIRED_PARAMS.
-       This is the primary resolution path.
-
-    2. If the hint resolves to an empty list [], the tool is a no-param tool
-       (e.g. get_new_fund_offers). Skip all DB lookups; the MCP server will
-       answer from the query text alone.
-
-    3. If the hint is unknown or absent, fall back to querying the equifiz_tools
-       Chroma collection for required_parameters metadata (legacy path).
-
-    4. For each required parameter, call _targeted_db_lookup() against the
-       correct DB table per PARAM_TO_TABLE_MAP.
-
-    5. CRITICAL: co_code from symbol_resolution is NEVER carried forward into
-       mcp_resolved_codes unless the tool actually requires co_code. This
-       prevents stock co_codes from polluting MF tool calls.
-
-    6. If no codes could be resolved but the tool is a known no-param tool,
-       that is treated as success (empty resolved_codes is correct).
+    1. Query the equifiz_tools vector collection to find the single best-
+       matching MCP tool for the user's query.
+    2. Read the tool's required_parameters from its metadata.
+    3. For each required parameter that appears in PARAM_TO_TABLE_MAP, call
+       _targeted_db_lookup() to resolve the numeric code from the appropriate
+       DB table using fuzzy matching on the extracted entity name.
+    4. For scheme lookups, the full row also carries mf_cocode so both codes
+       are resolved in one DB round-trip.
+    5. Fall back gracefully: if the tool vector collection is unavailable,
+       or the tool metadata is missing required_parameters, resolve using the
+       legacy _resolve_mf_codes_from_db() path to ensure backward compat.
     """
-    console.print("[Node MPR] Tool-Driven Parameter Resolution (v5.2)")
-
-    entity     = (
-        state.get("mcp_scheme_name")
-        or state.get("mcp_amc_name")
-        or state.get("extracted_entity", "")
-    )
+    console.print("[Node MPR] High-Precision Parameter Resolution")
+    
+    entity     = state.get("extracted_entity", "")
     user_query = state.get("user_query", "")
-    tool_hint  = state.get("mcp_tool_hint", "").strip()
     resolved_codes: dict = {}
+    # entity = (
+    #     state.get("mcp_scheme_name")
+    #     or state.get("mcp_amc_name")
+    #     or state.get("extracted_entity", "")
+    # )
+    # user_query = state.get("user_query", "")
+    # resolved_codes: dict = {}
 
-    # ── Step 1: Determine required params from tool hint ─────────────────
-    required_params: Optional[list[str]] = None
+    # ── Carry forward co_code from symbol_resolution if already present ───
+    if state.get("co_code"):
+        resolved_codes["co_code"] = state["co_code"]
+        console.print(f"  co_code={state['co_code']} (carried from symbol_resolution)")
 
-    if tool_hint:
-        required_params = _get_required_params_for_tool(tool_hint)
-        if required_params is not None:
-            console.print(
-                f"📋 [TOOL REGISTRY] Tool='{tool_hint}' requires params: {required_params}"
-            )
+    # ── Step 1: find the best-matching tool in the vector store ───────────
+    req_params: list[str] = []
+    try:
+        # --- HOTFIX: Direct ChromaDB connection to bypass missing attribute error ---
+        import chromadb
+        client = chromadb.PersistentClient(path="./chroma_db")
+        collection = client.get_collection(name="equifiz_tools")
+        
+        # Query the collection directly
+        res = collection.query(query_texts=[user_query], n_results=1)
+        
+        if res['ids'] and res['ids'][0]:
+            meta       = res['metadatas'][0][0]
+            tool_name  = res['ids'][0][0]
+            raw_params = meta.get("required_parameters", "")
+            req_params = [p.strip() for p in raw_params.split(",") if p.strip()]
+            
+            # LOGGER: Show which tool was matched semantically
+            console.print(f"🎯 [CHROMA HIT] Tool: '{tool_name}' | Metadata requires: {req_params}")
         else:
-            console.print(
-                f"  Tool '{tool_hint}' not in registry — will try Chroma metadata"
-            )
-    else:
-        console.print("  No mcp_tool_hint — will try Chroma metadata")
+            console.print("  No tool matched in equifiz_tools collection — falling back")
+            
+    except Exception as e:
+        console.print(f"  Tool vector query failed: {e} — falling back to legacy resolution")
 
-    # ── Step 2: No-param tool → skip all DB resolution ───────────────────
-    if required_params is not None and len(required_params) == 0:
-        console.print(
-            f"⚡ [NO-PARAM TOOL] '{tool_hint}' needs no DB codes — "
-            f"MCP server will resolve from query text"
-        )
-        state["mcp_resolved_codes"] = {}
-        return state
-
-    # ── Step 3: If registry lookup failed, try Chroma metadata ───────────
-    if required_params is None:
-        try:
-            import chromadb
-            client     = chromadb.PersistentClient(path="./chroma_db")
-            collection = client.get_collection(name="equifiz_tools")
-            res        = collection.query(query_texts=[user_query], n_results=1)
-
-            if res["ids"] and res["ids"][0]:
-                meta       = res["metadatas"][0][0]
-                chroma_tool = res["ids"][0][0]
-                raw_params  = meta.get("required_parameters", "")
-                chroma_params = [p.strip() for p in raw_params.split(",") if p.strip()]
-
-                console.print(
-                    f"🎯 [CHROMA HIT] Tool: '{chroma_tool}' | "
-                    f"Metadata requires: {chroma_params}"
-                )
-
-                # Validate chroma params against our known mappable params
-                mappable = [p for p in chroma_params if p in PARAM_TO_TABLE_MAP]
-                if mappable:
-                    required_params = mappable
-                    console.print(
-                        f"  Chroma params after filtering to mappable: {required_params}"
-                    )
-                elif chroma_params:
-                    # Chroma returned params but none are DB-mappable (e.g. 'query')
-                    # Try to infer from the tool name returned by Chroma
-                    inferred = _get_required_params_for_tool(chroma_tool)
-                    if inferred is not None:
-                        required_params = inferred
-                        console.print(
-                            f"  Chroma tool '{chroma_tool}' mapped via registry: "
-                            f"{required_params}"
-                        )
-                    else:
-                        console.print(
-                            f"  Chroma params {chroma_params} are non-mappable and "
-                            f"tool '{chroma_tool}' not in registry — will use fallback"
-                        )
-                else:
-                    console.print("  Chroma hit but no required_parameters metadata")
-            else:
-                console.print("  No tool matched in equifiz_tools collection")
-
-        except Exception as e:
-            console.print(f"  Tool vector query failed: {e}")
-
-    # ── Step 4: Resolve each required param via _targeted_db_lookup ───────
-    if required_params:
-        for param in required_params:
+    # ── Step 2: resolve each required parameter using PARAM_TO_TABLE_MAP ─
+    if req_params:
+        for param in req_params:
+            if param in resolved_codes:
+                # Already resolved (e.g. co_code from symbol_resolution)
+                continue
             if param not in PARAM_TO_TABLE_MAP:
                 console.print(f"  Param '{param}' not in PARAM_TO_TABLE_MAP — skipping")
                 continue
 
-            cfg = PARAM_TO_TABLE_MAP[param]
-            console.print(
-                f"📂 [ROUTING] Parameter '{param}' → table '{cfg['table']}' "
-                f"| searching for: '{entity}'"
-            )
-
+            cfg   = PARAM_TO_TABLE_MAP[param]
+            
+            # LOGGER: Show exactly which table is being called for which param
+            console.print(f"📂 [ROUTING] Parameter '{param}' triggers search in table '{cfg['table']}'")
+            
             match = _targeted_db_lookup(
                 entity   = entity,
                 table    = cfg["table"],
@@ -933,25 +798,26 @@ def node_mcp_pre_resolve(state: AgentState) -> AgentState:
             if match:
                 code_val = int(match[cfg["id_field"]])
                 resolved_codes[param] = code_val
-                console.print(
-                    f"💎 [SUCCESS] {param}={code_val} from table '{cfg['table']}'"
-                )
+                
+                # LOGGER: Success message with fetched code
+                console.print(f"💎 [SUCCESS] Fetched {param}={code_val} from {cfg['table']}")
 
-                # scheme_master rows also carry mf_cocode — grab it for free
+                # scheme_master rows also carry mf_cocode — grab it free of charge
                 if param == "mf_schcode" and "mf_cocode" in match:
                     resolved_codes.setdefault("mf_cocode", int(match["mf_cocode"]))
                     console.print(
                         f"🔗 [LINKED] Also pulled mf_cocode={resolved_codes['mf_cocode']} "
-                        f"from scheme_master row"
+                        f"(from scheme_master row)"
                     )
             else:
-                console.print(
-                    f"  Could not resolve '{param}' for entity '{entity}'"
-                )
+                console.print(f"  Could not resolve '{param}' for entity '{entity}'")
 
-    # ── Step 5: Fallback — if still nothing resolved, use legacy helper ───
-    if not resolved_codes:
-        console.print("🔄 [FALLBACK] Using legacy _resolve_mf_codes_from_db()")
+    # ── Step 3: fallback — if nothing resolved yet, use legacy helper ─────
+    if not resolved_codes or (
+        "mf_schcode" not in resolved_codes and "mf_cocode" not in resolved_codes
+        and "co_code" not in resolved_codes
+    ):
+        console.print("🔄 [FALLBACK] Falling back to legacy _resolve_mf_codes_from_db()")
         mf_resolved = _resolve_mf_codes_from_db(
             scheme_name = state.get("mcp_scheme_name"),
             amc_name    = state.get("mcp_amc_name"),
@@ -959,32 +825,11 @@ def node_mcp_pre_resolve(state: AgentState) -> AgentState:
         )
         resolved_codes.update(mf_resolved)
 
+        # Sync friendly names back onto state
         if mf_resolved.get("scheme_name"):
             state["mcp_scheme_name"] = mf_resolved["scheme_name"]
         if mf_resolved.get("amc_name"):
             state["mcp_amc_name"] = mf_resolved["amc_name"]
-
-    # ── Step 6: co_code carry-forward GUARD ──────────────────────────────
-    # co_code from symbol_resolution must NOT be injected into mcp_resolved_codes
-    # unless the target tool actually requires it.  Without this guard, a stock
-    # co_code would silently pollute MF tool calls that need mf_cocode instead.
-    tool_needs_co_code = (
-        required_params is not None and "co_code" in required_params
-    ) or (
-        tool_hint in _CO_CODE_TOOLS
-    )
-
-    if state.get("co_code") and tool_needs_co_code:
-        resolved_codes.setdefault("co_code", state["co_code"])
-        console.print(
-            f"  co_code={state['co_code']} carried from symbol_resolution "
-            f"(tool '{tool_hint}' requires it)"
-        )
-    elif state.get("co_code") and not tool_needs_co_code:
-        console.print(
-            f"  ⚠️  co_code={state['co_code']} from symbol_resolution IGNORED "
-            f"— tool '{tool_hint}' does not require co_code"
-        )
 
     # ── Commit ────────────────────────────────────────────────────────────
     state["mcp_resolved_codes"] = resolved_codes
@@ -993,18 +838,16 @@ def node_mcp_pre_resolve(state: AgentState) -> AgentState:
         console.print(f"🏁 [FINAL] Resolved codes: {resolved_codes}")
     else:
         console.print(
-            f"  No codes resolved for entity='{entity}' "
-            f"(tool='{tool_hint}' may be a no-param or query-based tool — "
-            f"MCP server will handle resolution)"
+            f"  No codes resolved for entity='{entity}' / "
+            f"scheme='{state.get('mcp_scheme_name')}' / "
+            f"amc='{state.get('mcp_amc_name')}'"
         )
 
     return state
 
-
 def node_mcp_multi_pre_resolve(state: AgentState) -> AgentState:
     """
     Pre-resolve codes for ALL companies in a multi-company MCP query.
-    Uses the same tool-driven logic as node_mcp_pre_resolve.
     """
     console.print("[Node MMPR] MCP multi-company pre-resolution")
 
@@ -1016,41 +859,24 @@ def node_mcp_multi_pre_resolve(state: AgentState) -> AgentState:
         if name:
             to_resolve.append((name, c.get("nse_symbol")))
 
-    tool_hint       = state.get("mcp_tool_hint", "")
-    required_params = _get_required_params_for_tool(tool_hint) if tool_hint else None
-
     def _resolve_one(name: str, nse_sym: Optional[str]) -> dict:
         result: dict = {"name": name}
-
-        # Only do stock resolution if the tool actually needs co_code
-        needs_co_code = (
-            required_params is not None and "co_code" in required_params
-        ) or (tool_hint in _CO_CODE_TOOLS)
-
-        if needs_co_code:
-            stock = _resolve_single(name, nse_sym)
-            if stock:
-                result["co_code"]      = stock["co_code"]
-                result["company_info"] = stock["company_info"]
-                result["nse_symbol"]   = stock["nse_symbol"]
-
-        # MF resolution
+        stock = _resolve_single(name, nse_sym)
+        if stock:
+            result["co_code"]      = stock["co_code"]
+            result["company_info"] = stock["company_info"]
+            result["nse_symbol"]   = stock["nse_symbol"]
         mf = _resolve_mf_codes_from_db(
             scheme_name = name,
             amc_name    = name,
             entity_name = name,
         )
         result.update(mf)
-
-        codes: dict = {}
-        if needs_co_code and result.get("co_code"):
-            codes["co_code"] = result["co_code"]
-        if result.get("mf_cocode"):
-            codes["mf_cocode"] = result["mf_cocode"]
-        if result.get("mf_schcode"):
-            codes["mf_schcode"] = result["mf_schcode"]
-
-        result["mcp_resolved_codes"] = codes
+        result["mcp_resolved_codes"] = {
+            k: result[k]
+            for k in ("co_code", "mf_cocode", "mf_schcode")
+            if k in result
+        }
         return result
 
     with ThreadPoolExecutor(max_workers=min(4, len(to_resolve))) as executor:
@@ -1071,9 +897,7 @@ def node_mcp_multi_pre_resolve(state: AgentState) -> AgentState:
     if state["companies"]:
         first = state["companies"][0]
         state["mcp_resolved_codes"] = first.get("mcp_resolved_codes", {})
-        if first.get("co_code") and (
-            required_params is not None and "co_code" in (required_params or [])
-        ):
+        if first.get("co_code"):
             state["co_code"] = first["co_code"]
 
     console.print(
@@ -1084,7 +908,7 @@ def node_mcp_multi_pre_resolve(state: AgentState) -> AgentState:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# MCP Tool Call Node
+# MCP Tool Call Node  (v5 — asyncio-safe)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _run_mcp_in_new_loop(enriched_query: str) -> str:
@@ -1111,18 +935,97 @@ def _run_mcp_in_new_loop(enriched_query: str) -> str:
         loop.close()
 
 
+# def node_mcp_tool_call(state: AgentState) -> AgentState:
+#     """
+#     Execute the MCP client query with pre-resolved codes.
+
+#     v5 changes
+#     ──────────
+#     • Runs the async MCP query in a FRESH event loop on a dedicated thread
+#       (via _run_mcp_in_new_loop) — this eliminates the TaskGroup crash that
+#       occurred when asyncio.run() was called inside uvicorn's loop.
+#     • Hard 600-second timeout via concurrent.futures.
+#     • Catches TimeoutError and returns a clean error sentinel.
+#     """
+#     logger.info("[Node MTC] MCP tool call")
+
+#     try:
+#         from mcp_client import run_mcp_query  # noqa: F401 — validate import early
+#     except ImportError:
+#         logger.error("MCP client module not found. Ensure mcp_client.py is in the path.")
+#         state["mcp_raw_result"] = ""
+#         state["error"]          = "mcp_client_not_found"
+#         return state
+
+#     resolved_codes = state.get("mcp_resolved_codes") or {}
+#     user_query     = state.get("user_query", "")
+#     tool_hint      = state.get("mcp_tool_hint", "")
+#     scheme_name    = state.get("mcp_scheme_name", "")
+#     amc_name       = state.get("mcp_amc_name", "")
+
+#     # ── Build enriched query with pre-resolved codes ───────────────────────
+#     code_lines = []
+#     if resolved_codes.get("mf_schcode"):
+#         code_lines.append(
+#             f"mf_schcode={resolved_codes['mf_schcode']}"
+#             + (f" (scheme: {scheme_name})" if scheme_name else "")
+#         )
+#     if resolved_codes.get("mf_cocode"):
+#         code_lines.append(
+#             f"mf_cocode={resolved_codes['mf_cocode']}"
+#             + (f" (AMC: {amc_name})" if amc_name else "")
+#         )
+#     if resolved_codes.get("co_code"):
+#         code_lines.append(f"co_code={resolved_codes['co_code']}")
+
+#     enriched_query = user_query
+#     if code_lines:
+#         enriched_query = (
+#             f"{user_query}\n\n"
+#             f"[PRE-RESOLVED CODES — use these directly in tool calls, "
+#             f"do NOT call resolver tools again]\n"
+#             + "\n".join(code_lines)
+#         )
+#     if tool_hint:
+#         enriched_query += f"\n[SUGGESTED TOOL: {tool_hint}]"
+
+#     logger.info(f"  Enriched query (first 200 chars): {enriched_query[:200]}")
+
+#     # ── Execute on a dedicated thread with a fresh event loop ─────────────
+#     try:
+#         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+#             future = executor.submit(_run_mcp_in_new_loop, enriched_query)
+#             result = future.result(timeout=600)
+
+#         state["mcp_raw_result"]      = result
+#         state["mcp_tool_calls_made"] = []
+#         state["error"]               = None
+#         logger.info(f"  MCP result length: {len(result)} chars")
+
+#     except concurrent.futures.TimeoutError:
+#         logger.error("  MCP tool call timed out after 600 seconds")
+#         state["mcp_raw_result"] = ""
+#         state["error"]          = "mcp_call_timeout"
+
+#     except Exception as e:
+#         logger.error(f"  MCP tool call failed: {e}")
+#         state["mcp_raw_result"] = ""
+#         state["error"]          = f"mcp_call_failed: {e}"
+
+#     return state
+
+
 def node_mcp_tool_call(state: AgentState) -> AgentState:
     """
-    Execute the MCP client query with pre-resolved codes injected.
-
-    v5.2: Only injects codes that are actually present in mcp_resolved_codes.
-    Empty resolved_codes means the tool is query-based — the enriched query
-    is sent as-is and the MCP server handles resolution internally.
+    Execute the MCP client query with high-authority prompt injection.
+    
+    Updated to include strict System Instructions to force the internal LLM 
+    to use pre-resolved ID values for tool arguments.
     """
     console.print("[Node MTC] MCP tool call")
 
     try:
-        from mcp_client import run_mcp_query  # noqa: F401 — validate import early
+        from mcp_client import run_mcp_query
     except ImportError:
         console.print("MCP client module not found.")
         state["mcp_raw_result"] = ""
@@ -1135,36 +1038,36 @@ def node_mcp_tool_call(state: AgentState) -> AgentState:
     scheme_name    = state.get("mcp_scheme_name", "")
     amc_name       = state.get("mcp_amc_name", "")
 
-    # ── Build injection block — only include codes that were actually resolved
+    # ── Build high-authority injection block ───────────────────────────────
+   # ── Minimal, Clear Injection ───────────────────────────────────────────
+    # Inside graph.py -> node_mcp_tool_call
+
     code_lines = []
     if resolved_codes.get("mf_schcode"):
-        label = f" (scheme: {scheme_name})" if scheme_name else ""
-        code_lines.append(f"mf_schcode={resolved_codes['mf_schcode']}{label}")
+        code_lines.append(f"mf_schcode={resolved_codes['mf_schcode']}")
     if resolved_codes.get("mf_cocode"):
-        label = f" (AMC: {amc_name})" if amc_name else ""
-        code_lines.append(f"mf_cocode={resolved_codes['mf_cocode']}{label}")
-    if resolved_codes.get("co_code"):
-        code_lines.append(f"co_code={resolved_codes['co_code']}")
+        code_lines.append(f"mf_cocode={resolved_codes['mf_cocode']}")
 
     if code_lines:
+        # Wrap IDs in a specific tag for easy stripping
         injection_block = "\n".join(code_lines)
         enriched_query = (
             f"<PRE_RESOLVED>\n{injection_block}\n</PRE_RESOLVED>\n"
             f"User Query: {user_query}"
         )
     else:
-        # No codes resolved — tool is query-based, pass query directly
         enriched_query = user_query
 
     if tool_hint:
         enriched_query += f"\n\n[RECOMMENDED TOOL: {tool_hint}]"
 
-    console.print(f"📤 [MCP SEND] Enriched Query:\n{enriched_query[:400]}")
+    console.print(f"📤 [MCP SEND] Enriched Query: {enriched_query[:300]}...")
 
-    # ── Execute in isolated thread with fresh event loop ──────────────────
+    # ── Execute logic (isolated thread/loop) ─────────────────────────────
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(_run_mcp_in_new_loop, enriched_query)
+            # Keeping your 600s timeout
             result = future.result(timeout=600)
 
         if not result:
@@ -1173,7 +1076,7 @@ def node_mcp_tool_call(state: AgentState) -> AgentState:
         else:
             console.print(f"📥 [MCP RECEIVE] Result length: {len(result)} chars")
             state["mcp_raw_result"] = result
-
+            
         state["mcp_tool_calls_made"] = []
         state["error"] = None
 
@@ -1216,6 +1119,7 @@ You are a knowledgeable Indian equity and mutual fund analyst assistant.
 7. End with: This is not financial advice.
 """
 
+# Error sentinels and their user-facing messages
 _MCP_ERROR_MESSAGES = {
     "mcp_client_not_found": (
         "Sorry, the live data service is currently unavailable. "
@@ -1233,6 +1137,7 @@ def node_mcp_synthesis(state: AgentState) -> AgentState:
     mcp_result   = state.get("mcp_raw_result", "")
     error        = state.get("error", "")
 
+    # ── Hard error cases ───────────────────────────────────────────────────
     if error in _MCP_ERROR_MESSAGES:
         state["final_answer"] = _MCP_ERROR_MESSAGES[error]
         return state
@@ -1251,10 +1156,12 @@ def node_mcp_synthesis(state: AgentState) -> AgentState:
         )
         return state
 
+    # ── Early-exit: data tool returned "not found" on its first (and only) round ──
     result_lower = mcp_result.lower()
     if any(sig in result_lower for sig in _MCP_NOT_FOUND_SIGNALS):
         console.print("  MCP result contains 'not found' signal — synthesising from raw text")
 
+    # ── Normal synthesis ───────────────────────────────────────────────────
     prompt = MCP_SYNTHESIS_PROMPT.format(
         history=history_text,
         user_query=state.get("user_query", ""),
@@ -2050,26 +1957,20 @@ def route_after_classify(state: AgentState) -> str:
         return "greeting"
     if qt == "general":
         return "general"
-
     if qt == "company":
-        if mcp:
-            # v5.2: MF/AMC queries go directly to mcp_pre_resolve,
-            # bypassing symbol_resolution entirely to prevent co_code pollution
-            return "mcp_direct"
         return "company"
-
     if qt in ("comparison", "investment"):
         if mcp:
             return "multi_mcp"
         if is_broad and qt == "comparison":
             return "multi_broad"
         return "multi_fast"
-
     return "company"
 
 
 def route_after_symbol(state: AgentState) -> str:
-    # This router is only reached for non-MCP company queries
+    if state.get("mcp_needed"):
+        return "mcp_pre_resolve"
     if state.get("is_broad"):
         return "full_ingest"
     return "direct_api_fetch"
@@ -2123,10 +2024,7 @@ def build_graph() -> Any:
         {
             "greeting":    "greeting_handler",
             "general":     "general_handler",
-            # non-MCP company: goes through symbol_resolution first
             "company":     "symbol_resolution",
-            # MCP company: BYPASSES symbol_resolution, goes straight to mcp_pre_resolve
-            "mcp_direct":  "mcp_pre_resolve",
             "multi_fast":  "multi_direct_fetch",
             "multi_broad": "multi_full_ingest",
             "multi_mcp":   "mcp_multi_pre_resolve",
@@ -2136,11 +2034,12 @@ def build_graph() -> Any:
     g.add_edge("greeting_handler", END)
     g.add_edge("general_handler",  "synthesis")
 
-    # ── Single-company non-MCP: symbol_resolution → branch ────────────────
+    # ── Single-company: symbol_resolution → branch ─────────────────────────
     g.add_conditional_edges(
         "symbol_resolution",
         route_after_symbol,
         {
+            "mcp_pre_resolve":  "mcp_pre_resolve",
             "direct_api_fetch": "direct_api_fetch",
             "full_ingest":      "full_ingest",
         },
