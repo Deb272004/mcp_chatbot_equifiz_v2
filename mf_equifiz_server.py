@@ -132,7 +132,8 @@ _company_cache:    list[dict] = []
 _mf_amc_cache:     list[dict] = []
 _mf_scheme_cache:  list[dict] = []
 _group_cache:      list[dict] = []
-
+_index_cache: list[dict] = []
+_etf_master_cache: list[dict] = []  
 
 def _db():
     return psycopg2.connect(**DB)
@@ -441,6 +442,116 @@ def _resolve_group(query: str, exchange: str | None = None) -> str | None:
         return None
     return results[0]["group_name"]
 
+################# etf resolve ##########################
+
+def _load_etf_master_cache() -> list[dict]:
+    global _etf_master_cache
+    if _etf_master_cache:
+        return _etf_master_cache
+    try:
+        conn = _db()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT isin, etfname FROM etf_master")
+            _etf_master_cache = [dict(r) for r in cur.fetchall()]
+        conn.close()
+    except Exception as e:
+        logger.error("ETF master cache load failed: %s", e)
+    return _etf_master_cache
+
+
+def _fuzzy_etf(
+    query: str,
+    limit: int = 5,
+    threshold: int = FUZZY_THRESHOLD,
+) -> list[dict]:
+    q       = query.strip()
+    q_lower = q.lower()
+    q_upper = q.upper()
+    scored: list[tuple[dict, int]] = []
+
+    for etf in _load_etf_master_cache():
+        isin = (etf.get("isin")    or "").upper()
+        name = (etf.get("etfname") or "").lower()
+
+        if q_upper == isin:
+            scored.append((etf, 100))
+            continue
+
+        score_name = max(
+            fuzz.token_set_ratio(q_lower, name),
+            fuzz.partial_ratio(q_lower, name),
+        )
+        score_isin = fuzz.ratio(q_upper, isin)
+
+        final = max(score_name, score_isin)
+        if final >= threshold:
+            scored.append((etf, final))
+
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return [e for e, _ in scored[:limit]]
+
+
+def _resolve_etf_isin(query: str) -> str | None:
+    results = _fuzzy_etf(query, limit=1)
+    if not results:
+        logger.warning("Could not resolve ETF ISIN from query: %r", query)
+        return None
+    return results[0]["isin"]
+
+
+#################################### index code resolve #######################################
+
+
+
+def _load_index_cache() -> list[dict]:
+    global _index_cache
+    if _index_cache:
+        return _index_cache
+    try:
+        conn = _db()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT indexcode, group_name FROM group_master")
+            _index_cache = [dict(r) for r in cur.fetchall()]
+        conn.close()
+    except Exception as e:
+        logger.error("Index cache load failed: %s", e)
+    return _index_cache
+
+
+def _fuzzy_index(
+    query: str,
+    limit: int = 5,
+    threshold: int = FUZZY_THRESHOLD,
+) -> list[dict]:
+    q       = query.strip()
+    q_lower = q.lower()
+    scored: list[tuple[dict, int]] = []
+
+    for idx in _load_index_cache():
+        name = (idx.get("group_name") or "").lower()
+
+        if q_lower == name:
+            scored.append((idx, 100))
+            continue
+
+        score = max(
+            fuzz.token_set_ratio(q_lower, name),
+            fuzz.partial_ratio(q_lower, name),
+        )
+        if score >= threshold:
+            scored.append((idx, score))
+
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return [i for i, _ in scored[:limit]]
+
+
+def _resolve_index_code(query: str) -> int | None:
+    results = _fuzzy_index(query, limit=1)
+    if not results:
+        logger.warning("Could not resolve index code from query: %r", query)
+        return None
+    return results[0]["indexcode"]
+
 
 # ── API endpoint map ────────────────────────────────────────────────────────────
 
@@ -591,6 +702,16 @@ EP = {
     "scheme_ratios":        f"{BASE_URL}/Scheme_Ratios",
     "dividend_details":     f"{BASE_URL}/DividendDetails/{{mf_schcode}}",
     "mf_news":              f"{BASE_URL}/MF_News/{{sno}}",
+
+    #--------------------- etf : data ------------------------------
+    "get_etf_quotes" : f"{BASE_URL}/ETFGetQuotes/{{ex}}/{{isin}}",
+    "get_etf_returns":f"{BASE_URL}/ETFReturns/{{isin}}",
+    "get_etf_fundamentals":f"{BASE_URL}/ETFFundamentals/{{isin}}",
+    "get_etf_about":f"{BASE_URL}/ETFAboutus/{{isin}}",
+    "etf_equity_holdings":f"{BASE_URL}/ETFShareHoldingEquity/{{isin}}",
+    "get_etf_monthly_portfolio" : f"{BASE_URL}/ETFMonthlyPortfolioAllHoldings/{{isin}}",
+    "get_etf_sector_allocation" :f"{BASE_URL}/ETFSectorAllocation/{{isin}}",
+    "get_etf_asset_allocation":f"{BASE_URL}/ETFAssetAllocation/{{isin}}"
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1300,33 +1421,14 @@ def get_new_highs_lows(
         
         lines.append(
             f"  {i:>2}. {name:<27} | {ltp:>10} | {indicator} {pct}%"
-        )
-        
+        )   
+
     return "\n".join(lines)
 
 
-@mcp.tool(description="Get list of all market indices with their codes. Use code with get_index_companies.")
-def get_index_list() -> str:
-    data, err = _get(EP["index_list"], "IndexList")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No index data found."
-    lines = [f"Market Indices ({len(rows)} total):"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, ["index_code", "index_name", "exchange"])
-        lines.append(
-            f"  {i:>3}. {p.get('index_name','N/A'):<40}"
-            f"  Code: {p.get('index_code','N/A')}"
-            f"  [{p.get('exchange','')}]"
-        )
-    return "\n".join(lines)
-
-
-@mcp.tool(description="Get companies in a specific market index. REQUIRES index_code — call get_index_list first.")
+@mcp.tool(description="Get companies in a specific market index. REQUIRES index_code — call _resolve_index_code first.")
 def get_index_companies(index_code: int) -> str:
-    val, err = _require_int(index_code, "index_code", "get_index_list")
+    val, err = _require_int(index_code, "index_code", "_resolve_index_code")
     if err:
         return err
     url = EP["index_wise_comp"].format(index_code=val)
@@ -6850,11 +6952,414 @@ def get_amfi_master(mf_schcode: Optional[int] = None) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 10 — MF SCHEME-LEVEL TOOLS
+# SECTION 10 — ETF LEVEL TOOLS
 # ═══════════════════════════════════════════════════════════════════════════════
+@mcp.tool(description=(
+    "Get current ETF price and trading data: open, high, low, current price, previous price, "
+    "price diff, volume, and 52-week high/low. "
+    "REQUIRES isin — call resolve_etf_isin first. exchange: 'NSE' (default) or 'BSE'."
+))
+def get_etf_quotes(isin: str, exchange: str = "NSE") -> str:
+    """
+    Args:
+        isin: ETF ISIN code. Call resolve_etf_isin first.
+        exchange: 'NSE' or 'BSE'.
+    """
+    if not isin or not isin.strip():
+        return "'isin' is required. Call resolve_etf_isin first to get it."
+
+    try:
+        ex = _normalise_exchange(exchange)
+    except ValueError as e:
+        return str(e)
+
+    # Endpoint as per documentation: https://equifizapis.cmots.com/api/ETFGetQuotes/{exchange}/EOD
+    url = EP["get_etf_quotes"].format(isin=isin, ex=ex)
+    
+    # We pass ISIN as a parameter or filter depending on the internal _get implementation
+    data, err = _get(url, f"ETFGetQuotes[{isin}/{ex}]")
+    if err:
+        return err
+
+    rows = _rows(data)
+    if not rows:
+        return f"No ETF quote data found for ISIN '{isin}' on {ex}."
+
+    # Mapping based on the image's field list
+    r = rows[0]
+    metrics = {
+        "ISIN":          r.get("ISIN",          isin),
+        "Exchange":      r.get("Exchange",       ex),
+        "Trade Date":    r.get("tradedate",      "N/A"),
+        "Open":          r.get("dayopen",        0.0),
+        "High":          r.get("dayhigh",        0.0),
+        "Low":           r.get("daylow",         0.0),
+        "Current Price": r.get("currentprice",   0.0),
+        "Prev Price":    r.get("previousprice",  0.0),
+        "Price Diff":    r.get("pricediff",      0.0),
+        "Pct Change":    r.get("priceperchange", 0.0),
+        "Volume":        r.get("volume",         0),
+        "52W High":      r.get("hi_52_wk",       0.0),
+        "52W Low":       r.get("lo_52_wk",       0.0),
+        "52W High Date": r.get("h52date",        "N/A"),
+        "52W Low Date":  r.get("l52date",        "N/A"),
+    }
+
+    # Formatting the output for the user
+    header = f"### ETF Quote: {metrics['ISIN']} [{metrics['Exchange']}]"
+    lines = [header, "---"]
+
+    for label, value in metrics.items():
+        if label in {"ISIN", "Exchange"}:
+            continue
+        
+        # Format Volume with commas
+        if label == "Volume":
+            formatted = f"{int(value):,}"
+        # Format currency fields
+        elif isinstance(value, (float, int)) and label not in {"Pct Change"}:
+            formatted = f"₹{value:,.2f}"
+        # Format percentage
+        elif label == "Pct Change":
+            formatted = f"{value}%"
+        else:
+            formatted = str(value)
+            
+        lines.append(f"* **{label}:** {formatted}")
+
+    return "\n".join(lines)
 
 
+@mcp.tool(description=(
+    "Get ETF historical returns (1y, 3y, 5y, inception) and category benchmarks. "
+    "REQUIRES isin — call resolve_etf_isin first."
+))
+def get_etf_returns(isin: str) -> str:
+    """
+    Args:
+        isin: ETF ISIN code. Call resolve_etf_isin first.
+    """
+    if not isin or not isin.strip():
+        return "'isin' is required. Call resolve_etf_isin first to get it."
 
+    # Endpoint: https://equifizapis.cmots.com/api/ETFReturns/{ISIN}/EOD
+    url = EP["get_etf_returns"].format(isin=isin)
+    data, err = _get(url, f"ETFReturns[{isin}]")
+    if err:
+        return err
+
+    rows = _rows(data)
+    if not rows:
+        return f"No return data found for ISIN '{isin}'."
+
+    r = rows[0]
+    
+    def fmt_pct(val):
+        try:
+            return f"{float(val):.2f}%" if val is not None else "N/A"
+        except (ValueError, TypeError):
+            return "N/A"
+
+    header = f"### ETF Performance: {isin}"
+    lines = [header, "---"]
+
+    # Basic Info
+    lines.append(f"* **Category:** {r.get('etfcategory', 'N/A')}")
+    lines.append(f"* **Returns Since Inception:** {fmt_pct(r.get('retinc'))}")
+    
+    # 1-Year Performance
+    lines.append(f"* **1-Year Return:** {fmt_pct(r.get('ret1y'))} (Category Avg: {fmt_pct(r.get('categoryavg1y'))})")
+    lines.append(f"* **1-Year Rank:** {r.get('rank1y', 'N/A')} of {r.get('count1y', 'N/A')}")
+    
+    # 3-Year Performance
+    lines.append(f"* **3-Year Return:** {fmt_pct(r.get('ret3y'))} (Category Avg: {fmt_pct(r.get('categoryavg3y'))})")
+    lines.append(f"* **3-Year Rank:** {r.get('rank3y', 'N/A')} of {r.get('count3y', 'N/A')}")
+    
+    # 5-Year Performance
+    lines.append(f"* **5-Year Return:** {fmt_pct(r.get('ret5y'))} (Category Avg: {fmt_pct(r.get('categoryavg5y'))})")
+    lines.append(f"* **5-Year Rank:** {r.get('rank5y', 'N/A')} of {r.get('count5y', 'N/A')}")
+
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Get ETF fundamental data: expense ratio, AUM, P/E, P/B ratios, and risk profile. "
+    "REQUIRES isin — call resolve_etf_isin first."
+))
+def get_etf_fundamentals(isin: str) -> str:
+    """
+    Args:
+        isin: ETF ISIN code. Call resolve_etf_isin first.
+    """
+    if not isin or not isin.strip():
+        return "'isin' is required. Call resolve_etf_isin first to get it."
+
+    # Endpoint: https://equifizapis.cmots.com/api/ETFFundamentals/{ISIN}/EOD
+    url = EP["get_etf_fundamentals"].format(isin=isin)
+    data, err = _get(url, f"ETFFundamentals[{isin}]")
+    if err:
+        return err
+
+    rows = _rows(data)
+    if not rows:
+        return f"No fundamental data found for ISIN '{isin}'."
+
+    r = rows[0]
+    
+    # Mapping logic for user-facing insights
+    header = f"### ETF Fundamentals: {isin}"
+    lines = [header, "---"]
+
+    # Description & Category
+    if r.get("description"):
+        lines.append(f"{r.get('description')}\n")
+    
+    lines.append(f"* **Category:** {r.get('etfcategory', 'N/A')}")
+    lines.append(f"* **Inception Date:** {r.get('inceptiondate', 'N/A')}")
+
+    # Cost & Risk
+    er = r.get("expenseratio", 0.0)
+    lines.append(f"* **Expense Ratio:** {er}% (as of {r.get('expenseratiodate', 'N/A')})")
+    
+    risk_val = r.get("riskometer", "N/A")
+    lines.append(f"* **Risk Profile:** Level {risk_val}")
+
+    # Size & Portfolio
+    aum = r.get("aum", 0.0)
+    lines.append(f"* **AUM (Assets Under Management):** ₹{aum:,.2f} Cr (as of {r.get('aumdate', 'N/A')})")
+    lines.append(f"* **Stock Count:** {r.get('stockcount', 0)} holdings")
+
+    # Valuation Metrics
+    lines.append(f"* **Portfolio P/E:** {r.get('portfoliope', 'N/A')}")
+    lines.append(f"* **Portfolio P/B:** {r.get('portfoliopb', 'N/A')}")
+
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Get general information about an ETF: description, launch date, fund managers, and ETF code. "
+    "REQUIRES isin — call resolve_etf_isin first."
+))
+def get_etf_about(isin: str) -> str:
+    """
+    Args:
+        isin: ETF ISIN code. Call resolve_etf_isin first.
+    """
+    if not isin or not isin.strip():
+        return "'isin' is required. Call resolve_etf_isin first to get it."
+
+    # Endpoint: https://equifizapis.cmots.com/api/ETFAboutus/{ISIN}/EOD
+    url = EP["get_etf_about"].format(isin=isin)
+    data, err = _get(url, f"ETFAboutus[{isin}]")
+    if err:
+        return err
+
+    rows = _rows(data)
+    if not rows:
+        return f"No background information found for ISIN '{isin}'."
+
+    r = rows[0]
+    
+    header = f"### About ETF: {r.get('etfcode', isin)}"
+    lines = [header, "---"]
+
+    # Fund Description
+    if r.get("description"):
+        lines.append(f"**Overview:**\n{r.get('description')}\n")
+
+    # Key Facts
+    lines.append(f"* **ISIN:** {r.get('isin', isin)}")
+    lines.append(f"* **Founded Date:** {r.get('foundeddate', 'N/A')}")
+    lines.append(f"* **Fund Manager(s):** {r.get('fundmanagers', 'N/A')}")
+
+    return "\n".join(lines)
+
+@mcp.tool(description=(
+    "Get detailed equity holdings for an ETF, including stock names, sectors, "
+    "and percentage weightage. REQUIRES isin — call resolve_etf_isin first."
+))
+def get_etf_equity_holdings(isin: str) -> str:
+    """
+    Args:
+        isin: ETF ISIN code. Call resolve_etf_isin first.
+    """
+    if not isin or not isin.strip():
+        return "'isin' is required. Call resolve_etf_isin first to get it."
+
+    # Endpoint: https://equifizapis.cmots.com/api/ETFShareholdingEquity/{isin}/EOD
+    url = EP["etf_equity_holdings"].format(isin=isin)
+    data, err = _get(url, f"ETFShareholdingEquity[{isin}]")
+    if err:
+        return err
+
+    rows = _rows(data)
+    if not rows:
+        return f"No equity holding data found for ISIN '{isin}'."
+
+    # Use the first row to establish the portfolio date
+    portfolio_date = rows[0].get("portfoliodate", "N/A")
+    header = f"### ETF Equity Holdings: {isin}"
+    lines = [header, f"**Portfolio Date:** {portfolio_date}", "---"]
+
+    for r in rows:
+        scrip_name = r.get("scripname", "Unknown")
+        sector = r.get("sector", "N/A")
+        weight = r.get("holdingpercentage", 0.0)
+        
+        # Mapping price and change if relevant, but prioritizing weight and sector
+        price = r.get("scripprice", 0.0)
+        change = r.get("scripperchange", 0.0)
+
+        # Formatting: Stock Name (Sector) : Weight%
+        # We include price data as a secondary detail for completeness
+        lines.append(
+            f"* **{scrip_name}** ({sector}): {weight:.2f}% "
+            f"| Price: ₹{price:,.2f} ({change:+.2f}%)"
+        )
+
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Get the complete monthly portfolio holdings for an ETF. "
+    "Includes security names, market values, and percentage weights. "
+    "REQUIRES isin — call resolve_etf_isin first."
+))
+def get_etf_monthly_portfolio(isin: str) -> str:
+    """
+    Args:
+        isin: ETF ISIN code. Call resolve_etf_isin first.
+    """
+    if not isin or not isin.strip():
+        return "'isin' is required. Call resolve_etf_isin first to get it."
+
+    # Endpoint: https://equifizapis.cmots.com/api/ETFMonthlyPortfolio/{isin}/EOD
+    url = EP["get_etf_monthly_portfolio"].format(isin=isin)
+    data, err = _get(url, f"ETFMonthlyPortfolio[{isin}]")
+    if err:
+        return err
+
+    rows = _rows(data)
+    if not rows:
+        return f"No monthly portfolio data found for ISIN '{isin}'."
+
+    # Establish the reporting date from the first record
+    report_date = rows[0].get("portfoliodate", "N/A")
+    header = f"### Monthly Portfolio Disclosure: {isin}"
+    lines = [header, f"**Reporting Date:** {report_date}", "---"]
+
+    for r in rows:
+        # Extracting relevant investor data
+        security = r.get("HoldingSecurityName", "Unknown Security")
+        asset_type = r.get("AssetName", "N/A")
+        sector = r.get("SectorName_EquityIn", "N/A")
+        weight = r.get("HoldingPercentage", 0.0)
+        mkt_val = r.get("MarketValue", 0.0)
+        shares = r.get("TotalShares", 0.0)
+
+        # Formatting each entry for maximum clarity
+        # Security Name (Asset Type) | Weight%
+        # Details: Sector, Market Value, and Shares
+        lines.append(f"* **{security}** ({asset_type})")
+        lines.append(f"  * **Weight:** {weight:.2f}%")
+        if sector and sector != "N/A":
+            lines.append(f"  * **Sector:** {sector}")
+        lines.append(f"  * **Market Value:** ₹{mkt_val:,.2f} Cr")
+        lines.append(f"  * **Total Shares:** {int(shares):,}")
+        lines.append("") # Empty line for spacing between securities
+
+    return "\n".join(lines)
+
+@mcp.tool(description=(
+    "Get the sector-wise allocation of an ETF. "
+    "Provides percentage weights for various industries. "
+    "REQUIRES isin — call resolve_etf_isin first."
+))
+def get_etf_sector_allocation(isin: str) -> str:
+    """
+    Args:
+        isin: ETF ISIN code. Call resolve_etf_isin first.
+    """
+    if not isin or not isin.strip():
+        return "'isin' is required. Call resolve_etf_isin first to get it."
+
+    # Endpoint: https://equifizapis.cmots.com/api/ETFSectorAllocation/{isin}/EOD
+    url = EP["get_etf_sector_allocation"].format(isin=isin)
+    data, err = _get(url, f"ETFSectorAllocation[{isin}]")
+    if err:
+        return err
+
+    rows = _rows(data)
+    if not rows:
+        return f"No sector allocation data found for ISIN '{isin}'."
+
+    # First row defines the date of the portfolio snapshot
+    portfolio_date = rows[0].get("portfoliodate", "N/A")
+    header = f"### Sector Allocation: {isin}"
+    lines = [header, f"**Snapshot Date:** {portfolio_date}", "---"]
+
+    # Filter and sort data to show highest allocation first
+    # percentageholding in image is an Int
+    sorted_rows = sorted(
+        rows, 
+        key=lambda x: x.get("percentageholding", 0), 
+        reverse=True
+    )
+
+    for r in sorted_rows:
+        sector = r.get("sectorname", "Other/Unknown")
+        weight = r.get("percentageholding", 0)
+        shares = r.get("totalshares", 0)
+
+        # Mapping relevant user data: Sector name and weight
+        # totalshares included as secondary context
+        lines.append(f"* **{sector}:** {weight}% (Total Shares: {shares:,})")
+
+    return "\n".join(lines)
+
+@mcp.tool(description=(
+    "Get the high-level asset allocation of an ETF (e.g., Equity vs. Cash). "
+    "REQUIRES isin — call resolve_etf_isin first."
+))
+def get_etf_asset_allocation(isin: str) -> str:
+    """
+    Args:
+        isin: ETF ISIN code. Call resolve_etf_isin first.
+    """
+    if not isin or not isin.strip():
+        return "'isin' is required. Call resolve_etf_isin first to get it."
+
+    # Endpoint: https://equifizapis.cmots.com/api/ETFAssetAllocation/{isin}/EOD
+    url = EP["get_etf_asset_allocation"].format(isin=isin)
+    data, err = _get(url, f"ETFAssetAllocation[{isin}]")
+    if err:
+        return err
+
+    rows = _rows(data)
+    if not rows:
+        return f"No asset allocation data found for ISIN '{isin}'."
+
+    # Mapping to the fields in the provided documentation
+    # Note: Using PascalCase as suggested by the far-right column of your image
+    report_date = rows[0].get("Portfoliodate", "N/A")
+    header = f"### Asset Allocation: {isin}"
+    lines = [header, f"**Portfolio Date:** {report_date}", "---"]
+
+    # Sort by weight to show the primary asset class first
+    sorted_rows = sorted(
+        rows, 
+        key=lambda x: x.get("PercentageHolding", 0.0), 
+        reverse=True
+    )
+
+    for r in sorted_rows:
+        asset_name = r.get("Assetname", "Other")
+        weight = r.get("PercentageHolding", 0.0)
+        
+        # We skip Assetcode as it is an internal ID and not relevant to the user
+        lines.append(f"* **{asset_name}:** {weight:,.2f}%")
+
+    return "\n".join(lines)
 # ══════════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
     mcp.run()
