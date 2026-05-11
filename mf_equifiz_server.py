@@ -6973,36 +6973,37 @@ def get_etf_quotes(isin: str, exchange: str = "NSE") -> str:
     except ValueError as e:
         return str(e)
 
-    # Endpoint as per documentation: https://equifizapis.cmots.com/api/ETFGetQuotes/{exchange}/EOD
+    # Updated URL construction to match your successful test: {exchange}/{isin}
     url = EP["get_etf_quotes"].format(isin=isin, ex=ex)
     
-    # We pass ISIN as a parameter or filter depending on the internal _get implementation
     data, err = _get(url, f"ETFGetQuotes[{isin}/{ex}]")
     if err:
         return err
 
-    rows = _rows(data)
-    if not rows:
+    # Based on your test output, 'data' is the key containing the list
+    rows = data.get("data") if isinstance(data, dict) else None
+    if not rows or len(rows) == 0:
         return f"No ETF quote data found for ISIN '{isin}' on {ex}."
 
-    # Mapping based on the image's field list
     r = rows[0]
+    
+    # Mapping keys exactly as they appear in your JSON output
     metrics = {
-        "ISIN":          r.get("ISIN",          isin),
-        "Exchange":      r.get("Exchange",       ex),
-        "Trade Date":    r.get("tradedate",      "N/A"),
-        "Open":          r.get("dayopen",        0.0),
-        "High":          r.get("dayhigh",        0.0),
-        "Low":           r.get("daylow",         0.0),
-        "Current Price": r.get("currentprice",   0.0),
-        "Prev Price":    r.get("previousprice",  0.0),
-        "Price Diff":    r.get("pricediff",      0.0),
-        "Pct Change":    r.get("priceperchange", 0.0),
-        "Volume":        r.get("volume",         0),
-        "52W High":      r.get("hi_52_wk",       0.0),
-        "52W Low":       r.get("lo_52_wk",       0.0),
-        "52W High Date": r.get("h52date",        "N/A"),
-        "52W Low Date":  r.get("l52date",        "N/A"),
+        "ISIN":          isin,
+        "Exchange":      r.get("Exchange", ex),
+        "Trade Date":    r.get("TradeDate", "N/A"),
+        "Open":          r.get("DayOpen", 0.0),
+        "High":          r.get("DayHigh", 0.0),
+        "Low":           r.get("DayLow", 0.0),
+        "Current Price": r.get("CurrentPrice", 0.0),
+        "Prev Price":    r.get("PreviousPrice", 0.0),
+        "Price Diff":    r.get("Pricediff", 0.0),
+        "Pct Change":    r.get("PricePerChange", 0.0),
+        "Volume":        r.get("Volume", 0),
+        "52W High":      r.get("HI_52_WK", 0.0),
+        "52W Low":       r.get("LO_52_WK", 0.0),
+        "52W High Date": r.get("H52DATE", "N/A"),
+        "52W Low Date":  r.get("L52DATE", "N/A"),
     }
 
     # Formatting the output for the user
@@ -7016,19 +7017,21 @@ def get_etf_quotes(isin: str, exchange: str = "NSE") -> str:
         # Format Volume with commas
         if label == "Volume":
             formatted = f"{int(value):,}"
-        # Format currency fields
-        elif isinstance(value, (float, int)) and label not in {"Pct Change"}:
+        # Format currency fields (Current Price, High, Low, etc.)
+        elif isinstance(value, (float, int)) and label != "Pct Change":
             formatted = f"₹{value:,.2f}"
         # Format percentage
         elif label == "Pct Change":
-            formatted = f"{value}%"
+            formatted = f"{value:.2f}%"
+        # Clean up ISO timestamps for readability
+        elif "Date" in label and value != "N/A":
+            formatted = value.split('T')[0]
         else:
             formatted = str(value)
             
         lines.append(f"* **{label}:** {formatted}")
 
     return "\n".join(lines)
-
 
 @mcp.tool(description=(
     "Get ETF historical returns (1y, 3y, 5y, inception) and category benchmarks. "
@@ -7042,13 +7045,15 @@ def get_etf_returns(isin: str) -> str:
     if not isin or not isin.strip():
         return "'isin' is required. Call resolve_etf_isin first to get it."
 
-    # Endpoint: https://equifizapis.cmots.com/api/ETFReturns/{ISIN}/EOD
+    # Endpoint as per your successful test: https://equifizapis.cmots.com/api/ETFReturns/{isin}
     url = EP["get_etf_returns"].format(isin=isin)
+    
     data, err = _get(url, f"ETFReturns[{isin}]")
     if err:
         return err
 
-    rows = _rows(data)
+    # Extracting from the 'data' list in the response
+    rows = data.get("data") if isinstance(data, dict) else None
     if not rows:
         return f"No return data found for ISIN '{isin}'."
 
@@ -7061,26 +7066,25 @@ def get_etf_returns(isin: str) -> str:
             return "N/A"
 
     header = f"### ETF Performance: {isin}"
-    lines = [header, "---"]
-
-    # Basic Info
-    lines.append(f"* **Category:** {r.get('etfcategory', 'N/A')}")
-    lines.append(f"* **Returns Since Inception:** {fmt_pct(r.get('retinc'))}")
     
-    # 1-Year Performance
-    lines.append(f"* **1-Year Return:** {fmt_pct(r.get('ret1y'))} (Category Avg: {fmt_pct(r.get('categoryavg1y'))})")
-    lines.append(f"* **1-Year Rank:** {r.get('rank1y', 'N/A')} of {r.get('count1y', 'N/A')}")
-    
-    # 3-Year Performance
-    lines.append(f"* **3-Year Return:** {fmt_pct(r.get('ret3y'))} (Category Avg: {fmt_pct(r.get('categoryavg3y'))})")
-    lines.append(f"* **3-Year Rank:** {r.get('rank3y', 'N/A')} of {r.get('count3y', 'N/A')}")
-    
-    # 5-Year Performance
-    lines.append(f"* **5-Year Return:** {fmt_pct(r.get('ret5y'))} (Category Avg: {fmt_pct(r.get('categoryavg5y'))})")
-    lines.append(f"* **5-Year Rank:** {r.get('rank5y', 'N/A')} of {r.get('count5y', 'N/A')}")
+    # Building the response lines with correct PascalCase keys
+    lines = [
+        header,
+        "---",
+        f"* **Category:** {r.get('ETFCategory', 'N/A')}",
+        f"* **Returns Since Inception:** {fmt_pct(r.get('RetInc'))}",
+        "#### 1-Year Performance",
+        f"* **Return:** {fmt_pct(r.get('Ret1Y'))} (Category Avg: {fmt_pct(r.get('CategoryAvg1Y'))})",
+        f"* **Rank:** {r.get('rank1Y', 'N/A')} of {r.get('count1Y', 'N/A')}",
+        "#### 3-Year Performance",
+        f"* **Return:** {fmt_pct(r.get('Ret3Y'))} (Category Avg: {fmt_pct(r.get('CategoryAvg3Y'))})",
+        f"* **Rank:** {r.get('rank3Y', 'N/A')} of {r.get('count3Y', 'N/A')}",
+        "#### 5-Year Performance",
+        f"* **Return:** {fmt_pct(r.get('Ret5Y'))} (Category Avg: {fmt_pct(r.get('CategoryAvg5Y'))})",
+        f"* **Rank:** {r.get('rank5Y', 'N/A')} of {r.get('count5Y', 'N/A')}"
+    ]
 
     return "\n".join(lines)
-
 
 @mcp.tool(description=(
     "Get ETF fundamental data: expense ratio, AUM, P/E, P/B ratios, and risk profile. "
@@ -7094,47 +7098,55 @@ def get_etf_fundamentals(isin: str) -> str:
     if not isin or not isin.strip():
         return "'isin' is required. Call resolve_etf_isin first to get it."
 
-    # Endpoint: https://equifizapis.cmots.com/api/ETFFundamentals/{ISIN}/EOD
+    # Endpoint based on your successful test: https://equifizapis.cmots.com/api/ETFFundamentals/{isin}
     url = EP["get_etf_fundamentals"].format(isin=isin)
+    
     data, err = _get(url, f"ETFFundamentals[{isin}]")
     if err:
         return err
 
-    rows = _rows(data)
+    # Extracting from the 'data' list in the response
+    rows = data.get("data") if isinstance(data, dict) else None
     if not rows:
         return f"No fundamental data found for ISIN '{isin}'."
 
     r = rows[0]
     
-    # Mapping logic for user-facing insights
+    # Helper to clean up ISO dates (2026-04-30T00:00:00 -> 2026-04-30)
+    def fmt_date(d_str):
+        return d_str.split('T')[0] if d_str and 'T' in d_str else d_str
+
     header = f"### ETF Fundamentals: {isin}"
     lines = [header, "---"]
 
-    # Description & Category
-    if r.get("description"):
-        lines.append(f"{r.get('description')}\n")
+    # Description (using PascalCase key from your logs)
+    desc = r.get("Description")
+    if desc:
+        lines.append(f"{desc}\n")
     
-    lines.append(f"* **Category:** {r.get('etfcategory', 'N/A')}")
-    lines.append(f"* **Inception Date:** {r.get('inceptiondate', 'N/A')}")
+    # Basic Info
+    lines.append(f"* **Category:** {r.get('ETFCategory', 'N/A')}")
+    lines.append(f"* **Inception Date:** {fmt_date(r.get('InceptionDate', 'N/A'))}")
 
     # Cost & Risk
-    er = r.get("expenseratio", 0.0)
-    lines.append(f"* **Expense Ratio:** {er}% (as of {r.get('expenseratiodate', 'N/A')})")
-    
-    risk_val = r.get("riskometer", "N/A")
-    lines.append(f"* **Risk Profile:** Level {risk_val}")
+    er = r.get("ExpenseRatio", 0.0)
+    er_date = fmt_date(r.get("ExpenseRatioDate", "N/A"))
+    lines.append(f"* **Expense Ratio:** {er}% (as of {er_date})")
+    lines.append(f"* **Riskometer:** {r.get('Riskometer', 'N/A')}")
 
     # Size & Portfolio
-    aum = r.get("aum", 0.0)
-    lines.append(f"* **AUM (Assets Under Management):** ₹{aum:,.2f} Cr (as of {r.get('aumdate', 'N/A')})")
-    lines.append(f"* **Stock Count:** {r.get('stockcount', 0)} holdings")
+    aum = r.get("AUM", 0.0)
+    aum_date = fmt_date(r.get("AUMDate", "N/A"))
+    lines.append(f"* **AUM (Assets Under Management):** ₹{aum:,.2f} Cr (as of {aum_date})")
+    lines.append(f"* **Stock Count:** {r.get('StockCount', 0)} holdings")
 
-    # Valuation Metrics
-    lines.append(f"* **Portfolio P/E:** {r.get('portfoliope', 'N/A')}")
-    lines.append(f"* **Portfolio P/B:** {r.get('portfoliopb', 'N/A')}")
+    # Valuation Metrics (Showing N/A if 0.0, common for commodity/debt ETFs)
+    pe = r.get("PortfolioPE")
+    pb = r.get("PortfolioPB")
+    lines.append(f"* **Portfolio P/E:** {pe if pe != 0.0 else 'N/A'}")
+    lines.append(f"* **Portfolio P/B:** {pb if pb != 0.0 else 'N/A'}")
 
     return "\n".join(lines)
-
 
 @mcp.tool(description=(
     "Get general information about an ETF: description, launch date, fund managers, and ETF code. "
@@ -7148,31 +7160,46 @@ def get_etf_about(isin: str) -> str:
     if not isin or not isin.strip():
         return "'isin' is required. Call resolve_etf_isin first to get it."
 
-    # Endpoint: https://equifizapis.cmots.com/api/ETFAboutus/{ISIN}/EOD
+    # Updated URL construction to match your test: https://equifizapis.cmots.com/api/ETFAboutus/{isin}
     url = EP["get_etf_about"].format(isin=isin)
+    
     data, err = _get(url, f"ETFAboutus[{isin}]")
     if err:
         return err
 
-    rows = _rows(data)
+    # Extracting from the 'data' list in the response
+    rows = data.get("data") if isinstance(data, dict) else None
     if not rows:
         return f"No background information found for ISIN '{isin}'."
 
     r = rows[0]
     
-    header = f"### About ETF: {r.get('etfcode', isin)}"
+    # Use ETFCode for header if available, otherwise fallback to ISIN
+    etf_code = r.get("ETFCode", isin)
+    header = f"### About ETF: {etf_code}"
     lines = [header, "---"]
 
-    # Fund Description
-    if r.get("description"):
-        lines.append(f"**Overview:**\n{r.get('description')}\n")
+    # Fund Description (PascalCase)
+    desc = r.get("Description")
+    if desc:
+        lines.append(f"**Overview:**\n{desc}\n")
 
     # Key Facts
-    lines.append(f"* **ISIN:** {r.get('isin', isin)}")
-    lines.append(f"* **Founded Date:** {r.get('foundeddate', 'N/A')}")
-    lines.append(f"* **Fund Manager(s):** {r.get('fundmanagers', 'N/A')}")
+    # Formatting the date to remove the timestamp
+    raw_date = r.get("FoundedDate", "N/A")
+    founded_date = raw_date.split('T')[0] if 'T' in raw_date else raw_date
+
+    # Cleaning up Fund Manager names (removing potential leading/trailing whitespace)
+    managers = r.get("FundManagers", "N/A").strip()
+
+    lines.append(f"* **ISIN:** {r.get('ISIN', isin)}")
+    lines.append(f"* **ETF Code:** {etf_code}")
+    lines.append(f"* **Founded Date:** {founded_date}")
+    lines.append(f"* **Fund Manager(s):** {managers}")
 
     return "\n".join(lines)
+
+
 
 @mcp.tool(description=(
     "Get detailed equity holdings for an ETF, including stock names, sectors, "
@@ -7186,35 +7213,39 @@ def get_etf_equity_holdings(isin: str) -> str:
     if not isin or not isin.strip():
         return "'isin' is required. Call resolve_etf_isin first to get it."
 
-    # Endpoint: https://equifizapis.cmots.com/api/ETFShareholdingEquity/{isin}/EOD
+    # Updated URL construction based on your test: https://equifizapis.cmots.com/api/ETFShareHoldingEquity/{isin}
     url = EP["etf_equity_holdings"].format(isin=isin)
-    data, err = _get(url, f"ETFShareholdingEquity[{isin}]")
+    
+    data, err = _get(url, f"ETFShareHoldingEquity[{isin}]")
     if err:
         return err
 
-    rows = _rows(data)
+    # Extracting from the 'data' list in the response
+    rows = data.get("data") if isinstance(data, dict) else None
     if not rows:
         return f"No equity holding data found for ISIN '{isin}'."
 
-    # Use the first row to establish the portfolio date
-    portfolio_date = rows[0].get("portfoliodate", "N/A")
+    # Clean up the portfolio date from the first entry
+    raw_date = rows[0].get("PortfolioDate", "N/A")
+    portfolio_date = raw_date.split('T')[0] if 'T' in raw_date else raw_date
+    
     header = f"### ETF Equity Holdings: {isin}"
     lines = [header, f"**Portfolio Date:** {portfolio_date}", "---"]
 
-    for r in rows:
-        scrip_name = r.get("scripname", "Unknown")
-        sector = r.get("sector", "N/A")
-        weight = r.get("holdingpercentage", 0.0)
-        
-        # Mapping price and change if relevant, but prioritizing weight and sector
-        price = r.get("scripprice", 0.0)
-        change = r.get("scripperchange", 0.0)
+    # Table Header for better scannability
+    lines.append("| Scrip Name | Sector | Weight (%) | Price | Change |")
+    lines.append("|:---|:---|:---|:---|:---|")
 
-        # Formatting: Stock Name (Sector) : Weight%
-        # We include price data as a secondary detail for completeness
+    for r in rows:
+        scrip_name = r.get("ScripName", "Unknown")
+        sector = r.get("Sector", "N/A")
+        weight = r.get("HoldingPercentage", 0.0)
+        price = r.get("ScripPrice", 0.0)
+        change = r.get("ScripPerChange", 0.0)
+
+        # Formatting each row into the table
         lines.append(
-            f"* **{scrip_name}** ({sector}): {weight:.2f}% "
-            f"| Price: ₹{price:,.2f} ({change:+.2f}%)"
+            f"| **{scrip_name}** | {sector} | {weight:.2f}% | ₹{price:,.2f} | {change:+.2f}% |"
         )
 
     return "\n".join(lines)
@@ -7233,42 +7264,44 @@ def get_etf_monthly_portfolio(isin: str) -> str:
     if not isin or not isin.strip():
         return "'isin' is required. Call resolve_etf_isin first to get it."
 
-    # Endpoint: https://equifizapis.cmots.com/api/ETFMonthlyPortfolio/{isin}/EOD
+    # Updated URL based on test: https://equifizapis.cmots.com/api/ETFMonthlyPortfolioAllHoldings/{isin}
     url = EP["get_etf_monthly_portfolio"].format(isin=isin)
+    
     data, err = _get(url, f"ETFMonthlyPortfolio[{isin}]")
     if err:
         return err
 
-    rows = _rows(data)
+    # Extracting from the 'data' list in the response
+    rows = data.get("data") if isinstance(data, dict) else None
     if not rows:
         return f"No monthly portfolio data found for ISIN '{isin}'."
 
-    # Establish the reporting date from the first record
-    report_date = rows[0].get("portfoliodate", "N/A")
+    # Clean up the reporting date
+    raw_date = rows[0].get("PortfolioDate", "N/A")
+    report_date = raw_date.split('T')[0] if 'T' in raw_date else raw_date
+    
     header = f"### Monthly Portfolio Disclosure: {isin}"
     lines = [header, f"**Reporting Date:** {report_date}", "---"]
 
+    # Table Header
+    lines.append("| Security | Asset Type | Sector | Weight (%) | Market Value |")
+    lines.append("|:---|:---|:---|:---|:---|")
+
     for r in rows:
-        # Extracting relevant investor data
-        security = r.get("HoldingSecurityName", "Unknown Security")
+        security = r.get("HoldingSecurityName", "Unknown")
         asset_type = r.get("AssetName", "N/A")
-        sector = r.get("SectorName_EquityIn", "N/A")
+        # Note the full key name from your logs: SectorName_EquityInvestment
+        sector = r.get("SectorName_EquityInvestment") or "-"
         weight = r.get("HoldingPercentage", 0.0)
         mkt_val = r.get("MarketValue", 0.0)
-        shares = r.get("TotalShares", 0.0)
-
-        # Formatting each entry for maximum clarity
-        # Security Name (Asset Type) | Weight%
-        # Details: Sector, Market Value, and Shares
-        lines.append(f"* **{security}** ({asset_type})")
-        lines.append(f"  * **Weight:** {weight:.2f}%")
-        if sector and sector != "N/A":
-            lines.append(f"  * **Sector:** {sector}")
-        lines.append(f"  * **Market Value:** ₹{mkt_val:,.2f} Cr")
-        lines.append(f"  * **Total Shares:** {int(shares):,}")
-        lines.append("") # Empty line for spacing between securities
+        
+        # Add to table
+        lines.append(
+            f"| {security} | {asset_type} | {sector} | {weight:.2f}% | ₹{mkt_val:,.2f} Cr |"
+        )
 
     return "\n".join(lines)
+
 
 @mcp.tool(description=(
     "Get the sector-wise allocation of an ETF. "
@@ -7283,39 +7316,43 @@ def get_etf_sector_allocation(isin: str) -> str:
     if not isin or not isin.strip():
         return "'isin' is required. Call resolve_etf_isin first to get it."
 
-    # Endpoint: https://equifizapis.cmots.com/api/ETFSectorAllocation/{isin}/EOD
+    # Updated URL construction based on test: https://equifizapis.cmots.com/api/ETFSectorAllocation/{isin}
     url = EP["get_etf_sector_allocation"].format(isin=isin)
+    
     data, err = _get(url, f"ETFSectorAllocation[{isin}]")
     if err:
         return err
 
-    rows = _rows(data)
+    # Extracting from the 'data' list in the response
+    rows = data.get("data") if isinstance(data, dict) else None
     if not rows:
         return f"No sector allocation data found for ISIN '{isin}'."
 
     # First row defines the date of the portfolio snapshot
-    portfolio_date = rows[0].get("portfoliodate", "N/A")
+    raw_date = rows[0].get("PortfolioDate", "N/A")
+    portfolio_date = raw_date.split('T')[0] if 'T' in raw_date else raw_date
+    
     header = f"### Sector Allocation: {isin}"
     lines = [header, f"**Snapshot Date:** {portfolio_date}", "---"]
 
-    # Filter and sort data to show highest allocation first
-    # percentageholding in image is an Int
+    # Sorting by PercentageHolding (PascalCase) descending
     sorted_rows = sorted(
         rows, 
-        key=lambda x: x.get("percentageholding", 0), 
+        key=lambda x: x.get("PercentageHolding", 0.0), 
         reverse=True
     )
 
     for r in sorted_rows:
-        sector = r.get("sectorname", "Other/Unknown")
-        weight = r.get("percentageholding", 0)
-        shares = r.get("totalshares", 0)
+        sector = r.get("SectorName", "Other/Unknown")
+        weight = r.get("PercentageHolding", 0.0)
+        shares = r.get("TotalShares", 0)
 
-        # Mapping relevant user data: Sector name and weight
-        # totalshares included as secondary context
-        lines.append(f"* **{sector}:** {weight}% (Total Shares: {shares:,})")
+        # Format based on the weight
+        # Using :.2f for weight as sector allocations can often have decimals
+        lines.append(f"* **{sector}:** {weight:.2f}% (Total Shares: {int(shares):,})")
 
     return "\n".join(lines)
+    
 
 @mcp.tool(description=(
     "Get the high-level asset allocation of an ETF (e.g., Equity vs. Cash). "
@@ -7329,21 +7366,24 @@ def get_etf_asset_allocation(isin: str) -> str:
     if not isin or not isin.strip():
         return "'isin' is required. Call resolve_etf_isin first to get it."
 
-    # Endpoint: https://equifizapis.cmots.com/api/ETFAssetAllocation/{isin}/EOD
+    # Updated URL construction to match successful test pattern
     url = EP["get_etf_asset_allocation"].format(isin=isin)
+    
     data, err = _get(url, f"ETFAssetAllocation[{isin}]")
     if err:
         return err
 
-    rows = _rows(data)
+    # Extracting from the 'data' list in the response
+    rows = data.get("data") if isinstance(data, dict) else None
     if not rows:
         return f"No asset allocation data found for ISIN '{isin}'."
 
-    # Mapping to the fields in the provided documentation
-    # Note: Using PascalCase as suggested by the far-right column of your image
-    report_date = rows[0].get("Portfoliodate", "N/A")
+    # Clean up the portfolio date from the first entry
+    raw_date = rows[0].get("PortfolioDate", "N/A")
+    portfolio_date = raw_date.split('T')[0] if 'T' in raw_date else raw_date
+    
     header = f"### Asset Allocation: {isin}"
-    lines = [header, f"**Portfolio Date:** {report_date}", "---"]
+    lines = [header, f"**Portfolio Date:** {portfolio_date}", "---"]
 
     # Sort by weight to show the primary asset class first
     sorted_rows = sorted(
@@ -7353,13 +7393,15 @@ def get_etf_asset_allocation(isin: str) -> str:
     )
 
     for r in sorted_rows:
-        asset_name = r.get("Assetname", "Other")
+        # Mapping to the exact PascalCase keys from your API response
+        asset_name = r.get("AssetName", "Other")
         weight = r.get("PercentageHolding", 0.0)
         
-        # We skip Assetcode as it is an internal ID and not relevant to the user
-        lines.append(f"* **{asset_name}:** {weight:,.2f}%")
+        # Displaying weight with 2 decimal places for accuracy
+        lines.append(f"* **{asset_name}:** {weight:.2f}%")
 
     return "\n".join(lines)
+
 # ══════════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
     mcp.run()
