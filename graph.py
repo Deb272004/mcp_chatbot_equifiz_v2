@@ -6676,7 +6676,12 @@ PARAM_TO_TABLE_MAP: dict[str, dict[str, str]] = {
         "column":   "etf_name",
         "id_field": "isin",
     },
-}
+    "index_code" : {
+        "table" : "group_master",
+        "column": "group_name",
+        "id_field" : "indexcode",
+    },
+ }
 
 # ── DB config ─────────────────────────────────────────────────────────────────
 
@@ -7223,6 +7228,70 @@ def _get_required_params_for_tool(tool_hint: str, matched_tools: list[dict]) -> 
     return []
 
 
+# def _resolve_entity_codes(
+#     name:            str,
+#     scheme_name:     Optional[str],
+#     amc_name:        Optional[str],
+#     nse_symbol:      Optional[str],
+#     required_params: list[str],
+# ) -> dict:
+#     """
+#     Resolve all DB codes needed by the target tool for a single entity.
+#     """
+#     codes:  dict = {}
+#     result: dict = {"name": name}
+
+#     needs_schcode  = "mf_schcode"  in required_params
+#     needs_cocode   = "mf_cocode"   in required_params
+#     needs_co_code  = "co_code"     in required_params
+#     needs_schcodes = "mf_schcodes" in required_params
+
+#     # ── mf_schcode / mf_schcodes ──────────────────────────────────────────
+#     if needs_schcode or needs_schcodes:
+#         search = scheme_name or name
+#         cfg    = PARAM_TO_TABLE_MAP["mf_schcode"]
+#         match  = _targeted_db_lookup(
+#             entity=search, table=cfg["table"],
+#             name_col=cfg["column"], id_col=cfg["id_field"],
+#         )
+#         if match:
+#             param_key = "mf_schcodes" if needs_schcodes else "mf_schcode"
+#             codes[param_key] = int(match["mf_schcode"])
+#             if "mf_cocode" in match:
+#                 codes.setdefault("mf_cocode", int(match["mf_cocode"]))
+#             result["resolved_scheme_name"] = match.get("sch_name", search)
+#             console.print(
+#                 f"  💎 [{name}] mf_schcode={codes[param_key]} "
+#                 f"mf_cocode={codes.get('mf_cocode')}"
+#             )
+
+#     # ── mf_cocode (only if not already populated from scheme_master) ──────
+#     if needs_cocode and not codes.get("mf_cocode"):
+#         search = amc_name or name
+#         cfg    = PARAM_TO_TABLE_MAP["mf_cocode"]
+#         match  = _targeted_db_lookup(
+#             entity=search, table=cfg["table"],
+#             name_col=cfg["column"], id_col=cfg["id_field"],
+#         )
+#         if match:
+#             codes["mf_cocode"] = int(match["mf_cocode"])
+#             console.print(f"  💎 [{name}] mf_cocode={codes['mf_cocode']}")
+
+#     # ── co_code ───────────────────────────────────────────────────────────
+#     if needs_co_code:
+#         stock = _resolve_single(name, nse_symbol)
+#         if stock:
+#             codes["co_code"] = stock["co_code"]
+#             result.update({
+#                 "co_code":      stock["co_code"],
+#                 "company_info": stock["company_info"],
+#                 "nse_symbol":   stock["nse_symbol"],
+#             })
+#             console.print(f"  💎 [{name}] co_code={codes['co_code']}")
+
+#     result["mcp_resolved_codes"] = codes
+#     return result
+
 def _resolve_entity_codes(
     name:            str,
     scheme_name:     Optional[str],
@@ -7236,10 +7305,12 @@ def _resolve_entity_codes(
     codes:  dict = {}
     result: dict = {"name": name}
 
-    needs_schcode  = "mf_schcode"  in required_params
-    needs_cocode   = "mf_cocode"   in required_params
-    needs_co_code  = "co_code"     in required_params
-    needs_schcodes = "mf_schcodes" in required_params
+    needs_schcode   = "mf_schcode"  in required_params
+    needs_cocode    = "mf_cocode"   in required_params
+    needs_co_code   = "co_code"     in required_params
+    needs_schcodes  = "mf_schcodes" in required_params
+    needs_isin      = "isin"        in required_params   # ← NEW
+    needs_indexcode = "index_code"  in required_params   # ← NEW
 
     # ── mf_schcode / mf_schcodes ──────────────────────────────────────────
     if needs_schcode or needs_schcodes:
@@ -7283,6 +7354,31 @@ def _resolve_entity_codes(
                 "nse_symbol":   stock["nse_symbol"],
             })
             console.print(f"  💎 [{name}] co_code={codes['co_code']}")
+
+    # ── isin ──────────────────────────────────────────────────────────────
+    if needs_isin:                                                  # ← NEW
+        search = scheme_name or name
+        cfg    = PARAM_TO_TABLE_MAP["isin"]
+        match  = _targeted_db_lookup(
+            entity=search, table=cfg["table"],
+            name_col=cfg["column"], id_col=cfg["id_field"],
+        )
+        if match:
+            codes["isin"] = match["isin"]          # string — no int cast
+            result["resolved_etf_name"] = match.get("etf_name", search)
+            console.print(f"  💎 [{name}] isin={codes['isin']}")
+
+    # ── index_code ────────────────────────────────────────────────────────
+    if needs_indexcode:                                             # ← NEW
+        cfg   = PARAM_TO_TABLE_MAP["index_code"]
+        match = _targeted_db_lookup(
+            entity=name, table=cfg["table"],
+            name_col=cfg["column"], id_col=cfg["id_field"],
+        )
+        if match:
+            codes["index_code"] = int(match["indexcode"])   # note: id_field is "indexcode"
+            result["resolved_index_name"] = match.get("group_name", name)
+            console.print(f"  💎 [{name}] index_code={codes['index_code']}")
 
     result["mcp_resolved_codes"] = codes
     return result
