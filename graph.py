@@ -7528,15 +7528,129 @@ def node_mcp_multi_pre_resolve(state: AgentState) -> AgentState:
 # Injection block builder
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# def _build_injection_block(state: AgentState) -> str:
+#     """
+#     Build the <PRE_RESOLVED> XML block prepended to the enriched MCP query.
+#     """
+#     companies = [
+#         c for c in (state.get("companies") or [])
+#         if c.get("mcp_resolved_codes")
+#     ]
+
+#     if len(companies) >= 2:
+#         primary_codes = state.get("mcp_resolved_codes") or {}
+#         if "mf_schcodes" in primary_codes:
+#             lines = [f"mf_schcodes={primary_codes['mf_schcodes']}"]
+#             return "<PRE_RESOLVED>\n" + "\n".join(lines) + "\n</PRE_RESOLVED>"
+
+#         lines: list[str] = []
+#         for i, c in enumerate(companies, start=1):
+#             codes = c["mcp_resolved_codes"]
+#             label = (
+#                 c.get("resolved_scheme_name")
+#                 or c.get("scheme_name")
+#                 or c.get("name", f"Entity {i}")
+#             )
+#             lines.append(f"Entity {i}: {label}")
+#             for k, v in codes.items():
+#                 lines.append(f"  {k}={v}")
+#         if lines:
+#             return "<PRE_RESOLVED>\n" + "\n".join(lines) + "\n</PRE_RESOLVED>"
+#         return ""
+
+#     resolved_codes = state.get("mcp_resolved_codes") or {}
+#     scheme_name    = state.get("mcp_scheme_name", "")
+#     amc_name       = state.get("mcp_amc_name", "")
+
+#     code_lines: list[str] = []
+#     for k, v in resolved_codes.items():
+#         label = ""
+#         if k in ("mf_schcode", "mf_schcodes") and scheme_name:
+#             label = f" (scheme: {scheme_name})"
+#         elif k == "mf_cocode" and amc_name:
+#             label = f" (AMC: {amc_name})"
+#         code_lines.append(f"{k}={v}{label}")
+
+#     if code_lines:
+#         return "<PRE_RESOLVED>\n" + "\n".join(code_lines) + "\n</PRE_RESOLVED>"
+#     return ""
+
+# def _build_injection_block(state: AgentState) -> str:
+#     """
+#     Build the <PRE_RESOLVED> XML block prepended to the enriched MCP query.
+#     Always includes human-readable names so the MCP server can resolve
+#     even when numeric codes are missing.
+#     """
+#     companies = [
+#         c for c in (state.get("companies") or [])
+#         if c.get("mcp_resolved_codes") or c.get("name") or c.get("scheme_name")
+#     ]
+
+#     # ── Multi-entity path ────────────────────────────────────────────────────
+#     if len(companies) >= 2:
+#         primary_codes = state.get("mcp_resolved_codes") or {}
+#         if "mf_schcodes" in primary_codes:
+#             lines = [f"mf_schcodes={primary_codes['mf_schcodes']}"]
+#             return "<PRE_RESOLVED>\n" + "\n".join(lines) + "\n</PRE_RESOLVED>"
+
+#         lines: list[str] = []
+#         for i, c in enumerate(companies, start=1):
+#             codes = c.get("mcp_resolved_codes") or {}
+#             label = (
+#                 c.get("resolved_scheme_name")
+#                 or c.get("scheme_name")
+#                 or c.get("name", f"Entity {i}")
+#             )
+#             amc   = c.get("amc_name") or c.get("mf_coname") or c.get("company_name") or ""
+
+#             lines.append(f"Entity {i}: {label}")
+#             if amc:
+#                 lines.append(f"  amc_name={amc}")             # ← NEW: always emit name
+#             for k, v in codes.items():
+#                 lines.append(f"  {k}={v}")
+
+#         if lines:
+#             return "<PRE_RESOLVED>\n" + "\n".join(lines) + "\n</PRE_RESOLVED>"
+#         return ""
+
+#     # ── Single-entity path ───────────────────────────────────────────────────
+#     resolved_codes = state.get("mcp_resolved_codes") or {}
+#     scheme_name    = state.get("mcp_scheme_name", "") or state.get("mcp_entity", "")
+#     amc_name       = state.get("mcp_amc_name", "")
+
+#     lines: list[str] = []
+
+#     # Always emit names first — MCP server can use these even without codes
+#     if scheme_name:
+#         lines.append(f"scheme_name={scheme_name}")             # ← NEW
+#     if amc_name:
+#         lines.append(f"amc_name={amc_name}")                   # ← NEW
+
+#     # Then emit codes (with inline labels for readability)
+#     for k, v in resolved_codes.items():
+#         label = ""
+#         if k in ("mf_schcode", "mf_schcodes") and scheme_name:
+#             label = f" (scheme: {scheme_name})"
+#         elif k == "mf_cocode" and amc_name:
+#             label = f" (AMC: {amc_name})"
+#         lines.append(f"{k}={v}{label}")
+
+#     if lines:
+#         return "<PRE_RESOLVED>\n" + "\n".join(lines) + "\n</PRE_RESOLVED>"
+#     return ""
+
 def _build_injection_block(state: AgentState) -> str:
     """
     Build the <PRE_RESOLVED> XML block prepended to the enriched MCP query.
+    Codes are emitted first (MCP server prefers direct lookup).
+    Names follow as fallback for when codes are absent or resolution fails.
     """
     companies = [
         c for c in (state.get("companies") or [])
-        if c.get("mcp_resolved_codes")
+        if c.get("mcp_resolved_codes") or c.get("name") or c.get("scheme_name")
     ]
 
+    # ── Multi-entity path ────────────────────────────────────────────────────
     if len(companies) >= 2:
         primary_codes = state.get("mcp_resolved_codes") or {}
         if "mf_schcodes" in primary_codes:
@@ -7545,38 +7659,54 @@ def _build_injection_block(state: AgentState) -> str:
 
         lines: list[str] = []
         for i, c in enumerate(companies, start=1):
-            codes = c["mcp_resolved_codes"]
+            codes = c.get("mcp_resolved_codes") or {}
             label = (
                 c.get("resolved_scheme_name")
                 or c.get("scheme_name")
                 or c.get("name", f"Entity {i}")
             )
+            amc = c.get("amc_name") or c.get("mf_coname") or c.get("company_name") or ""
+
             lines.append(f"Entity {i}: {label}")
+            # Codes first — direct lookup, no resolution needed
             for k, v in codes.items():
                 lines.append(f"  {k}={v}")
+            # Names as fallback
+            if amc:
+                lines.append(f"  amc_name={amc}")
+
         if lines:
             return "<PRE_RESOLVED>\n" + "\n".join(lines) + "\n</PRE_RESOLVED>"
         return ""
 
+    # ── Single-entity path ───────────────────────────────────────────────────
     resolved_codes = state.get("mcp_resolved_codes") or {}
-    scheme_name    = state.get("mcp_scheme_name", "")
+    scheme_name    = state.get("mcp_scheme_name", "") or state.get("mcp_entity", "")
     amc_name       = state.get("mcp_amc_name", "")
 
-    code_lines: list[str] = []
+    lines: list[str] = []
+
+    # Codes first — MCP server uses these directly, no resolve_mf_scheme call needed
     for k, v in resolved_codes.items():
         label = ""
         if k in ("mf_schcode", "mf_schcodes") and scheme_name:
             label = f" (scheme: {scheme_name})"
         elif k == "mf_cocode" and amc_name:
             label = f" (AMC: {amc_name})"
-        code_lines.append(f"{k}={v}{label}")
+        lines.append(f"{k}={v}{label}")
 
-    if code_lines:
-        return "<PRE_RESOLVED>\n" + "\n".join(code_lines) + "\n</PRE_RESOLVED>"
+    # Names as fallback — used only when codes are missing or resolution fails
+    if scheme_name:
+        lines.append(f"scheme_name={scheme_name}")
+    if amc_name:
+        lines.append(f"amc_name={amc_name}")
+
+    if lines:
+        return "<PRE_RESOLVED>\n" + "\n".join(lines) + "\n</PRE_RESOLVED>"
     return ""
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════
+# ══════════════════════════════════════════════════════════
 # MCP Tool Call Node
 # ═══════════════════════════════════════════════════════════════════════════════
 
