@@ -788,11 +788,7 @@ def search_companies(query: str, limit: int = 5) -> str:
     "REQUIRES co_code — call resolve_nse_symbol first. exchange: 'NSE' (default) or 'BSE'."
 ))
 def get_company_stock_price(co_code: int, exchange: str = "NSE") -> str:
-    """
-    Args:
-        co_code: CMOTS Company Code.
-        exchange: 'NSE' or 'BSE'.
-    """
+
     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
@@ -815,17 +811,16 @@ def get_company_stock_price(co_code: int, exchange: str = "NSE") -> str:
     
     r = rows[0]
     
-    # Manually mapping the keys from your documentation image to clean labels
-    # This avoids the 'tuple' error in your _pick function
+    # Updated mapping to match the actual API return keys (case-sensitive)
     metrics = {
         "Company": r.get("CompLname", "N/A"),
-        "LTP": r.get("Price", 0.0),
-        "Open": r.get("open_Price", 0.0),
-        "High": r.get("High_Price", 0.0),
-        "Low": r.get("Low_Price", 0.0),
-        "Prev Close": r.get("Oldprice", 0.0),
-        "Change": r.get("PriceDiff", 0.0),
-        "Pct Change": r.get("change", 0.0),
+        "LTP": r.get("price", 0.0),            # API returns 'price'
+        "Open": r.get("Open_Price", 0.0),      # API returns 'Open_Price'
+        "High": r.get("High_Price", 0.0),      # API returns 'High_Price'
+        "Low": r.get("Low_Price", 0.0),        # API returns 'Low_Price'
+        "Prev Close": r.get("OldPrice", 0.0),   # API returns 'OldPrice'
+        "Change": r.get("Pricediff", 0.0),     # API returns 'Pricediff'
+        "Pct Change": r.get("change", 0.0),    # API returns 'change'
         "Volume": r.get("Volume", 0),
         "52W High": r.get("HI_52_WK", 0.0),
         "52W Low": r.get("LO_52_WK", 0.0),
@@ -836,12 +831,10 @@ def get_company_stock_price(co_code: int, exchange: str = "NSE") -> str:
     header = f"### Stock Price: {metrics['Company']} [{ex}]"
     lines = [header, "---"]
     
-    # Skip 'Company' in the loop as it's in the header
     for label, value in metrics.items():
         if label == "Company":
             continue
             
-        # Add formatting for numbers vs strings
         if isinstance(value, (int, float)) and label != "Volume":
             formatted_val = f"₹{value:,.2f}"
         elif label == "Volume":
@@ -860,11 +853,7 @@ def get_company_stock_price(co_code: int, exchange: str = "NSE") -> str:
     "REQUIRES co_code — call resolve_nse_symbol first. exchange: 'NSE' or 'BSE'."
 ))
 def get_delayed_stock_price(co_code: int, exchange: str = "NSE") -> str:
-    """
-    Args:
-        co_code: CMOTS Company Code.
-        exchange: 'NSE' or 'BSE'.
-    """
+
     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
@@ -874,7 +863,7 @@ def get_delayed_stock_price(co_code: int, exchange: str = "NSE") -> str:
     except Exception:
         ex = "NSE"
         
-    # Endpoint derived from image 981328: BseNseDelayedPrice
+    # Endpoint remains same as per your configuration
     url = EP["nse_bse_current_stock_price"].format(ex=ex)
     data, err = _get(url, f"DelayedPrice[{ex}]")
     
@@ -883,23 +872,22 @@ def get_delayed_stock_price(co_code: int, exchange: str = "NSE") -> str:
         
     rows = data.get("data", [])
     
-    # FILTER: Find the specific company in the returned list using co_code
-    # This ensures we only return data for the requested company
-    target_row = next((r for r in rows if int(r.get("co_code", 0)) == val), None)
+    # FILTER: Match the specific co_code from the list
+    target_row = next((r for r in rows if int(float(r.get("co_code", 0))) == val), None)
     
     if not target_row:
         return f"Company code {val} not found in the current {ex} delayed price feed."
     
-    # Manually mapping keys from image_981328.png: CO_NAME, price, Open, High, Low, Volume, Tr_Date
+    # Mapping keys to match your actual API response
     metrics = {
         "Company": target_row.get("CO_NAME", "N/A"),
         "Symbol": target_row.get("SYMBOL", "N/A"),
-        "Current Price": target_row.get("price", 0.0),
-        "Open": target_row.get("Open", 0.0),
-        "High": target_row.get("High", 0.0),
-        "Low": target_row.get("Low", 0.0),
-        "Volume": target_row.get("Volume", 0),
-        "Trade Date": target_row.get("Tr_Date", "N/A")
+        "Current Price": target_row.get("price", 0.0), # API returns 'price'
+        "Open": target_row.get("Open", 0.0),           # API returns 'Open'
+        "High": target_row.get("High", 0.0),           # API returns 'High'
+        "Low": target_row.get("Low", 0.0),             # API returns 'Low'
+        "Volume": target_row.get("Volume", 0),         # API returns 'Volume'
+        "Trade Date": target_row.get("Tr_Date", "N/A") # API returns 'Tr_Date'
     }
 
     # Format the response for the LLM
@@ -913,7 +901,8 @@ def get_delayed_stock_price(co_code: int, exchange: str = "NSE") -> str:
         if isinstance(value, (int, float)) and label != "Volume":
             formatted_val = f"₹{value:,.2f}"
         elif label == "Volume":
-            formatted_val = f"{int(value):,}"
+            # Handles cases where Volume is returned as a float (e.g., 443.0)
+            formatted_val = f"{int(float(value)):,}"
         else:
             formatted_val = str(value)
             
@@ -944,14 +933,19 @@ def get_delayed_stock_price(co_code: int, exchange: str = "NSE") -> str:
 #         })
 #     filtered = [{k: v for k, v in idx.items() if v is not None} for idx in filtered]
 #     return json.dumps(filtered)
-
-@mcp.tool(description="Get live index values (e.g., NIFTY 50, SENSEX). exchange: 'NSE' or 'BSE'.")
+@mcp.tool(description=(
+    "Retrieves real-time market index data for the NSE and BSE. "
+    "Use this to check the current performance of major benchmarks like NIFTY 50, SENSEX, "
+    "and sectoral indices (Bank, IT, etc.). Returns Last Traded Price (LTP), "
+    "absolute change, and percentage change. Specify 'NSE' or 'BSE' as the exchange."
+))
 def get_market_indices(exchange: str = "NSE") -> str:
     try:
         ex_limit = _normalise_exchange(exchange)
     except ValueError as e:
         return str(e)
 
+    # Endpoint: indices
     data, err = _get(EP["indices"], "Indices")
     if err:
         return err
@@ -960,43 +954,45 @@ def get_market_indices(exchange: str = "NSE") -> str:
     if not rows:
         return "No index data found."
 
-    # Define major indices to prevent flooding the context
-    # Adjust names based on the 'symbol' or 'IndexName' in your raw data
+    # Filter for major indices to provide a concise summary
     major_indices = {
         "NSE": ["NIFTY 50", "NIFTY BANK", "NIFTY IT", "NIFTY NEXT 50", "NIFTY MIDCAP 100"],
-        "BSE": ["SENSEX", "BSE BANKEX", "BSE IT", "BSE 100"]
+        "BSE": ["SENSEX", "BSE BANKEX", "BSE IT", "BSE 100", "BSE MIDCAP"]
     }
 
     target_list = major_indices.get(ex_limit, [])
-    lines = [f"Market Indices Summary — {ex_limit}:"]
-    lines.append(f"{'Index Name':<20} | {'LTP':>10} | {'% Chg':>8}")
-    lines.append("-" * 45)
-
+    lines = [f"### Market Indices Summary — {ex_limit}"]
+    lines.append("---")
+    
     count = 0
     for row in rows:
-        # Normalize the name from various possible keys
-        name = (row.get("IndexName") or row.get("symbol") or row.get("SYMBOL") or "").strip()
+        # Match names based on actual API return keys
+        name = (row.get("IndexName") or row.get("SYMBOL") or row.get("symbol") or "").strip()
         ex_val = (row.get("exchange") or row.get("EXCHANGE") or "").upper()
 
-        # Skip if it doesn't match the exchange or isn't a 'Major' index
+        # Filtering logic
         if ex_limit and ex_val and ex_val != ex_limit:
             continue
         if target_list and name.upper() not in [n.upper() for n in target_list]:
             continue
 
-        # Extract values using the keys identified in your schema
-        ltp = row.get("LTP") or row.get("Close") or row.get("price") or "N/A"
-        pct = row.get("PER_CHANGE") or row.get("pchange") or row.get("PercentChange") or "0.00"
-        chg = row.get("CHANGE") or row.get("NetChange") or "0.00"
+        # Map values to keys identified in the latest API samples
+        ltp = row.get("price") or row.get("LTP") or row.get("Close") or 0.0
+        pct = row.get("pchange") or row.get("PER_CHANGE") or row.get("PercentChange") or 0.0
+        chg = row.get("Pricediff") or row.get("CHANGE") or row.get("NetChange") or 0.0
 
-        # Determine visual indicator
+        # Visual indicator for trend
         try:
             val = float(chg)
-            indicator = "▲" if val > 0 else "▼" if val < 0 else " "
-        except:
-            indicator = " "
+            indicator = "🟢" if val > 0 else "🔴" if val < 0 else "⚪"
+        except (ValueError, TypeError):
+            indicator = "⚪"
 
-        lines.append(f"  {name:<18} | {ltp:>10} | {indicator} {pct}%")
+        # Formatting for readability
+        formatted_ltp = f"{float(ltp):,.2f}"
+        formatted_pct = f"{float(pct):.2f}%"
+        
+        lines.append(f"* **{name}**: {formatted_ltp} ({indicator} {formatted_pct})")
         count += 1
 
     if count == 0:
@@ -1026,8 +1022,9 @@ def get_exchange_holidays(exchange: str = "NSE") -> str:
 
 
 @mcp.tool(description=(
-    "Get top active/value performing stocks for a group. "
-    "group: e.g. 'NIFTY50', 'BANKNIFTY'. exchange: 'NSE' or 'BSE'."
+    "Retrieves the top active stocks by value or volume for a specific market group or index "
+    "(e.g., 'NIFTY50', 'BSE_SENSEX'). Useful for identifying stocks with the highest liquidity "
+    "and trading interest during the session. REQUIRES exchange and group name."
 ))
 def get_active_performers(exchange: str = "NSE", group: str = "NIFTY50", record_count: int = 5) -> str:
     try:
@@ -1036,357 +1033,415 @@ def get_active_performers(exchange: str = "NSE", group: str = "NIFTY50", record_
         return str(e)
         
     resolved = _resolve_group(group, exchange=ex) or group.strip().upper()
-    url = EP["active_performer"].format(ex=ex, group=resolved, record_count=record_count)
+    
+    # Endpoint derived from your logs: MostActiveToppers/{ex}/{group}/value/{record_count}
+    url = EP["active_performer"].format(ex=ex.lower(), group=resolved, record_count=record_count)
     data, err = _get(url, f"ActivePerformer[{ex}/{resolved}]")
     
     if err:
         return err
+        
     rows = _rows(data)
     if not rows:
-        return "No data found."
+        return f"No active performer data found for group '{resolved}' on {ex}."
 
-    lines = [f"Top Active Performers — {ex} / {resolved}:"]
+    header = f"### Top Active Performers: {resolved} ({ex})"
+    lines = [header, "---"]
     
     for i, row in enumerate(rows, 1):
-        # Using the corrected keys from your pick list
-        p = _pick(row, [
-            "co_name",
-            "sc_group",
-            "open_price",
-            "high_price",
-            "low_price",
-            "close_price",
-            "bbuy_qty",
-            "bbuy_price",
-            "bsell_qty",
-            "bsell_price",
-            "prevclose",
-            "perchg",
-            "netchg",
-            "vol_traded",
-            "pervol",
-            "prev_vol_traded",
-            "prev_value_traded", # Added missing comma
-            "offerprice"
-        ])
+        # Extracting based on the actual keys seen in your API response
+        name = row.get("lname") or row.get("co_name") or "N/A"
+        symbol = row.get("symbol", "N/A")
+        ltp = row.get("close_price", 0.0)
+        net_chg = row.get("netchg", 0.0)
+        pct_chg = row.get("perchg", 0.0)
+        volume = row.get("vol_traded", 0)
+        value_traded = row.get("val_traded", 0.0) # In Crores based on typical CMOTS format
 
-        # Extract values using the precise keys from the pick list
-        name = p.get("co_name", "N/A")
-        # Assuming LTP is the current close_price in this dataset
-        ltp = p.get("close_price", "N/A")
-        change = p.get("netchg", "N/A")
-        pct = p.get("perchg", "N/A")
-        volume = p.get("vol_traded", "N/A")
+        # Determine trend indicator
+        indicator = "🟢" if net_chg > 0 else "🔴" if net_chg < 0 else "⚪"
 
-        lines.append(
-            f"  {i:>2}. {name:<25} | LTP: {ltp:>8} | Chg: {change:>6} ({pct}%) | Vol: {volume}"
+        # Format the entry
+        stock_line = (
+            f"{i}. **{name}** ({symbol})\n"
+            f"   * **LTP:** ₹{float(ltp):,.2f} ({indicator} {float(pct_chg):.2f}%)\n"
+            f"   * **Volume:** {int(float(volume)):,}\n"
+            f"   * **Value Traded:** ₹{float(value_traded):,.2f} Cr"
         )
+        lines.append(stock_line)
 
     return "\n".join(lines)
 
+
 @mcp.tool(description=(
-    "Get top gaining stocks for a group. "
-    "group: e.g. 'NIFTY50', 'BANKNIFTY'. exchange: 'NSE' or 'BSE'."
+    "Retrieves the top gaining stocks for a specific market group or index (e.g., 'NIFTY50', 'BSE_SENSEX'). "
+    "Returns stocks with the highest percentage price increase. Useful for identifying bullish momentum. "
+    "Requires exchange and group name."
 ))
 def get_top_gainers(exchange: str = "NSE", group: str = "NIFTY50", record_count: int = 5) -> str:
     try:
-        ex = _normalise_exchange(exchange)
-    except ValueError as e:
-        return str(e)
+        # Use lowercase exchange for the URL path as per your request log
+        ex_path = exchange.lower()
+        ex_display = exchange.upper()
+    except Exception:
+        ex_path = "nse"
+        ex_display = "NSE"
     
-    resolved = _resolve_group(group, exchange=ex) or group.strip().upper()
-    url = EP["gainers"].format(ex=ex, group=resolved, record_count=record_count)
-    data, err = _get(url, f"Gainers[{ex}/{resolved}]")
+    resolved = _resolve_group(group, exchange=ex_display) or group.strip().upper()
+    
+    # Endpoint derived from your logs: Gainers/{ex}/{group}/{record_count}
+    url = EP["gainers"].format(ex=ex_path, group=resolved, record_count=record_count)
+    data, err = _get(url, f"Gainers[{ex_display}/{resolved}]")
     
     if err:
         return err
+        
     rows = _rows(data)
     if not rows:
-        return "No gainers data found."
+        return f"No gainers found for group '{resolved}' on {ex_display}."
     
-    lines = [f"Top Gainers — {ex} / {resolved}:"]
+    header = f"### Top Gainers: {resolved} ({ex_display})"
+    lines = [header, "---"]
     
     for i, row in enumerate(rows, 1):
-        # Updated _pick to match your specific schema keys
-        p = _pick(row, [
-            "co_name", 
-            "symbol", 
-            "Close_price", 
-            "netchg", 
-            "perchg", 
-            "Open_Price", 
-            "PrevClose",
-            "vol_traded"
-        ])
+        # Extracting based on the actual keys seen in your API response
+        name = row.get("lname") or row.get("co_name") or "N/A"
+        symbol = row.get("symbol", "N/A")
+        ltp = row.get("close_price") or row.get("price") or 0.0
+        net_chg = row.get("netchg") or 0.0
+        pct_chg = row.get("perchg") or 0.0
+        volume = row.get("vol_traded") or 0
         
-        # Mapping the picked keys to the output display
-        name = p.get("co_name") or p.get("symbol", "N/A")
-        ltp = p.get("Close_price", "N/A")
-        change = p.get("netchg", "N/A")
-        pct = p.get("perchg", "N/A")
-        
-        lines.append(
-            f"  {i:>2}. {name:<25} | LTP: {ltp:>8} | ▲ {change} ({pct}%)"
+        # Formatting the entry for a clean chat response
+        stock_line = (
+            f"{i}. **{name}** ({symbol})\n"
+            f"   * **LTP:** ₹{float(ltp):,.2f} (🟢 +{float(pct_chg):.2f}%)\n"
+            f"   * **Net Change:** +₹{float(net_chg):,.2f}\n"
+            f"   * **Volume:** {int(float(volume)):,}"
         )
+        lines.append(stock_line)
         
     return "\n".join(lines)
 
 @mcp.tool(description=(
-    "Get top losing stocks for a group. "
-    "group: e.g. 'NIFTY50', 'BANKNIFTY'. exchange: 'NSE' or 'BSE'."
+    "Retrieves the top losing stocks for a specific market group or index (e.g., 'NIFTY50', 'BSE_SENSEX'). "
+    "Returns stocks with the largest percentage price decrease. Useful for identifying bearish trends. "
+    "Requires exchange and group name."
 ))
 def get_top_losers(exchange: str = "NSE", group: str = "NIFTY50", record_count: int = 5) -> str:
+    """
+    Args:
+        exchange: 'NSE' or 'BSE'.
+        group: The index or sector group code (e.g., 'NIFTY50', 'BSE_SENSEX').
+        record_count: Number of records to return (default 5).
+    """
     try:
-        ex = _normalise_exchange(exchange)
-    except ValueError as e:
-        return str(e)
+        # Lowercase for URL path, Uppercase for display context
+        ex_path = exchange.lower()
+        ex_display = exchange.upper()
+    except Exception:
+        ex_path = "nse"
+        ex_display = "NSE"
     
-    resolved = _resolve_group(group, exchange=ex) or group.strip().upper()
-    url = EP["losers"].format(ex=ex, group=resolved, record_count=record_count)
-    data, err = _get(url, f"Losers[{ex}/{resolved}]")
+    resolved = _resolve_group(group, exchange=ex_display) or group.strip().upper()
+    
+    # Endpoint derived from your logs: losers/{ex}/{group}/{record_count}
+    url = EP["losers"].format(ex=ex_path, group=resolved, record_count=record_count)
+    data, err = _get(url, f"Losers[{ex_display}/{resolved}]")
     
     if err:
         return err
+        
     rows = _rows(data)
     if not rows:
-        return "No losers data found."
+        return f"No losers found for group '{resolved}' on {ex_display}."
     
-    lines = [f"Top Losers — {ex} / {resolved}:"]
+    header = f"### Top Losers: {resolved} ({ex_display})"
+    lines = [header, "---"]
     
     for i, row in enumerate(rows, 1):
-        # Pick keys exactly as they appear in your schema list
-        p = _pick(row, [
-            "co_name", 
-            "symbol", 
-            "Close_price", 
-            "netchg", 
-            "perchg", 
-            "Open_Price", 
-            "PrevClose"
-        ])
+        # Extracting based on the exact keys from your API response
+        name = row.get("lname") or row.get("co_name") or "N/A"
+        symbol = row.get("symbol", "N/A")
+        ltp = row.get("close_price") or row.get("price") or 0.0
+        net_chg = row.get("netchg") or 0.0
+        pct_chg = row.get("perchg") or 0.0
+        volume = row.get("vol_traded") or 0
         
-        # Map picked keys to the formatted display
-        name = p.get("co_name") or p.get("symbol", "N/A")
-        ltp = p.get("Close_price", "N/A")
-        change = p.get("netchg", "N/A")
-        pct = p.get("perchg", "N/A")
-        
-        lines.append(
-            f"  {i:>2}. {name:<25} | LTP: {ltp:>8} | ▼ {change} ({pct}%)"
+        # Formatting for a clean and professional chat output
+        stock_line = (
+            f"{i}. **{name}** ({symbol})\n"
+            f"   * **LTP:** ₹{float(ltp):,.2f} (🔴 {float(pct_chg):.2f}%)\n"
+            f"   * **Net Change:** -₹{abs(float(net_chg)):,.2f}\n"
+            f"   * **Volume:** {int(float(volume)):,}"
         )
+        lines.append(stock_line)
         
     return "\n".join(lines)
 
 
 @mcp.tool(description=(
-    "Get outperforming or underperforming stocks vs their group index. "
-    "performer: 'out' or 'under'. group: e.g. 'NIFTY50'. exchange: 'NSE' or 'BSE'."
+    "Retrieves stocks that are outperforming or underperforming relative to a benchmark index "
+    "(e.g., 'BSE_SENSEX', 'NIFTY50'). 'Out' shows stocks beating the index, while 'under' shows "
+    "those lagging behind. Useful for relative strength analysis. "
+    "Requires exchange, group, and performer type ('out' or 'under')."
 ))
 def get_out_under_performers(
     exchange: str = "NSE", group: str = "NIFTY50",
     performer: str = "out", record_count: int = 5
 ) -> str:
     try:
-        ex = _normalise_exchange(exchange)
-    except ValueError as e:
-        return str(e)
+        ex_path = exchange.lower()
+        ex_display = exchange.upper()
+    except Exception:
+        ex_path = "nse"
+        ex_display = "NSE"
         
     p_type = performer.lower()
     if p_type not in ("out", "under"):
         return "performer must be 'out' or 'under'."
         
-    resolved = _resolve_group(group, exchange=ex) or group.strip().upper()
-    url = EP["out_under_performers"].format(ex=ex, group=resolved, performer=p_type, record_count=record_count)
-    data, err = _get(url, f"OutUnder[{ex}/{resolved}/{p_type}]")
+    resolved = _resolve_group(group, exchange=ex_display) or group.strip().upper()
+    
+    # Endpoint derived from your logs: OutUnderPerformers/{ex}/{group}/{performer}/{record_count}
+    url = EP["out_under_performers"].format(ex=ex_path, group=resolved, performer=p_type, record_count=record_count)
+    data, err = _get(url, f"OutUnder[{ex_display}/{resolved}/{p_type}]")
     
     if err:
         return err
+        
     rows = _rows(data)
     if not rows:
-        return f"No {p_type}performer data found."
+        return f"No {p_type}performer data found for {resolved} on {ex_display}."
         
     label = "Outperformers" if p_type == "out" else "Underperformers"
-    lines = [f"{label} vs Index — {ex} / {resolved}:"]
+    header = f"### {label} vs Index: {resolved} ({ex_display})"
+    lines = [header, "---"]
     
     for i, row in enumerate(rows, 1):
-        # Using the specific keys from your schema: co_name, close, diff, perchg
-        pr = _pick(row, [
-            "co_name", 
-            "close", 
-            "diff", 
-            "perchg", 
-            "opval", 
-            "closedate"
-        ])
+        # Extracting based on actual keys in the JSON response
+        name = row.get("lname") or row.get("co_name") or "N/A"
+        current_close = row.get("close1") or 0.0  # close1 is the latest date price in your log
+        prev_close = row.get("close") or 0.0     # close is the starting comparison price
+        diff = row.get("diff") or 0.0
+        pct_chg = row.get("perchg") or 0.0
+        rel_val = row.get("opval") or 0.0        # Relative performance value vs index
         
-        name = pr.get("co_name", "N/A")
-        ltp = pr.get("close", "N/A")
-        diff = pr.get("diff", "N/A")
-        pct = pr.get("perchg", "N/A")
+        # Determine visual indicator
+        indicator = "📈" if p_type == "out" else "📉"
         
-        # Use a directional arrow for clarity
-        trend = "▲" if p_type == "out" else "▼"
-        
-        lines.append(
-            f"  {i:>2}. {name:<25} | LTP: {ltp:>8} | {trend} {diff} ({pct}%)"
+        # Formatting for a detailed technical response
+        stock_line = (
+            f"{i}. **{name}**\n"
+            f"   * **Current Price:** ₹{float(current_close):,.2f} ({indicator} {float(pct_chg):.2f}%)\n"
+            f"   * **Price Change:** ₹{float(diff):,.2f}\n"
+            f"   * **Relative Alpha:** {float(rel_val):.2f}%"
         )
+        lines.append(stock_line)
         
     return "\n".join(lines)
 
-@mcp.tool(description="Get advance-decline statistics (advancing vs declining stocks) for market breadth.")
+@mcp.tool(description=(
+    "Retrieves market breadth statistics (Advances vs. Declines) for a specific exchange. "
+    "This data shows the number of stocks that have gained (Advances), lost (Declines), "
+    "or remained unchanged, along with the A/D ratio for various indices and market groups. "
+    "Use this to gauge overall market sentiment and strength."
+))
 def get_advance_decline(exchange: str = "NSE") -> str:
+    """
+    Args:
+        exchange: 'NSE' or 'BSE' (defaults to 'NSE').
+    """
     try:
-        ex = _normalise_exchange(exchange)
-    except ValueError as e:
-        return str(e)
+        ex_display = exchange.upper()
+        # Ensure the exchange is normalized for the API call
+        ex_path = "BSE" if ex_display == "BSE" else "NSE"
+    except Exception:
+        ex_path = "NSE"
+        ex_display = "NSE"
         
-    url = EP["advance_decline"].format(ex=ex)
-    data, err = _get(url, f"AdvanceDecline[{ex}]")
+    url = EP["advance_decline"].format(ex=ex_path)
+    data, err = _get(url, f"AdvanceDecline[{ex_display}]")
     
     if err:
         return err
+        
     rows = _rows(data)
     if not rows:
-        return "No advance-decline data."
+        return f"No advance-decline data found for {ex_display}."
         
-    lines = [f"Market Breadth (Advance/Decline) — {ex}:"]
-    lines.append(f"{'Index Name':<30} | {'Adv':>5} | {'Dec':>5} | {'Unch':>5} | {'A/D Ratio'}")
-    lines.append("-" * 75)
+    header = f"### Market Breadth (Advance/Decline): {ex_display}"
+    lines = [header, "---"]
     
+    # We'll pick a few key indices to show to avoid overwhelming the output, 
+    # but still show the general market trend.
     for row in rows:
-        p = _pick(row, [
-            "indexname", 
-            "adv", 
-            "dec", 
-            "noc", 
-            "ad", 
-            "voladv", 
-            "voldec"
-        ])
+        # Extract based on actual API keys: indexlongname, adv, dec, noc, ad
+        name = row.get("indexlongname") or row.get("indexname") or "N/A"
+        adv = row.get("adv", 0)
+        dec = row.get("dec", 0)
+        unch = row.get("noc", 0)
+        ratio = row.get("ad", 0.0)
         
-        index = p.get("indexname", "N/A")
-        adv = p.get("adv", 0)
-        dec = p.get("dec", 0)
-        unch = p.get("noc", 0)
-        ratio = p.get("ad", "N/A")
+        # Determine sentiment indicator based on A/D ratio
+        sentiment = "🐂" if float(ratio) > 1.2 else "🐻" if float(ratio) < 0.8 else "⚖️"
         
+        # We only display major groups or the exchange total to keep it scannable
+        # You can adjust this filter based on which groups you find most useful
         lines.append(
-            f"  {index:<28} | {adv:>5} | {dec:>5} | {unch:>5} | {ratio:>8}"
+            f"**{name}**\n"
+            f"   * {sentiment} **A/D Ratio:** {float(ratio):.2f}\n"
+            f"   * **Advances:** {adv} | **Declines:** {dec} | **Unchanged:** {unch}"
         )
         
     return "\n".join(lines)
 
-@mcp.tool(description="Get stocks at 52-week high. group: 'NIFTY50' or '-' for all. exchange: 'NSE' or 'BSE'.")
+@mcp.tool(description=(
+    "Retrieves a list of stocks that have recently hit or are trading near their 52-week high. "
+    "Use this to identify stocks with strong upward momentum or those breaking out of long-term ranges. "
+    "Requires exchange ('NSE' or 'BSE') and group (use '-' for all stocks)."
+))
 def get_52week_highs(exchange: str = "NSE", group: str = "-", record_count: int = 10) -> str:
+    """
+    Args:
+        exchange: 'NSE' or 'BSE'.
+        group: The index/sector group (e.g., 'NIFTY50') or '-' for all stocks.
+        record_count: Number of records to return (default 10).
+    """
     try:
-        ex = _normalise_exchange(exchange)
-    except ValueError as e:
-        return str(e)
+        ex_display = exchange.upper()
+        ex_path = "NSE" if ex_display == "NSE" else "BSE"
+    except Exception:
+        ex_path = "NSE"
+        ex_display = "NSE"
     
-    resolved = (_resolve_group(group, exchange=ex) if group != "-" else None) or "-"
-    url = EP["52w_high"].format(ex=ex, group=resolved, record_count=record_count)
-    data, err = _get(url, f"52WkHigh[{ex}]")
+    resolved = (_resolve_group(group, exchange=ex_display) if group != "-" else None) or "-"
+    
+    # Endpoint derived from logs: FiftyTwoWeekHighEOD/{ex}/{group}/{record_count}
+    url = EP["52w_high"].format(ex=ex_path, group=resolved, record_count=record_count)
+    data, err = _get(url, f"52WkHigh[{ex_display}]")
     
     if err:
         return err
+        
     rows = _rows(data)
     if not rows:
-        return "No 52-week high data found."
+        return f"No 52-week high data found for group '{resolved}' on {ex_display}."
     
-    # Determine the correct 52W high key based on the exchange
-    high_key = "n52high" if ex == "NSE" else "b52high"
-    date_key = "n52hdate" if ex == "NSE" else "b52hdate"
+    # API uses 'n' prefix for NSE and 'b' for BSE specific historical data
+    high_key = "n52high" if ex_path == "NSE" else "b52high"
+    date_key = "n52hdate" if ex_path == "NSE" else "b52hdate"
 
-    lines = [f"52-Week Highs — {ex} ({resolved}):"]
-    lines.append(f"{'Company Name':<30} | {'LTP':>10} | {'52W High':>10} | {'Date'}")
-    lines.append("-" * 70)
+    header = f"### 52-Week High Summary: {ex_display} ({resolved})"
+    lines = [header, "---"]
 
     for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "co_name", 
-            "symbol", 
-            "price", 
-            high_key, 
-            date_key,
-            "pchange"
-        ])
+        # Extract based on actual API response keys
+        name = row.get("lname") or row.get("co_name") or "N/A"
+        symbol = row.get("symbol", "N/A")
+        ltp = row.get("price", 0.0)
+        high_52 = row.get(high_key, 0.0)
+        h_date_raw = row.get(date_key, "N/A")
+        pct_chg = row.get("pchange", 0.0)
         
-        name = p.get("co_name") or p.get("symbol", "N/A")
-        ltp = p.get("price", "N/A")
-        high_52 = p.get(high_key, "N/A")
-        h_date = p.get(date_key, "N/A")
+        # Clean up the date string (removing timestamp if present)
+        h_date = h_date_raw.split("T")[0] if "T" in h_date_raw else h_date_raw
         
-        lines.append(
-            f"  {i:>2}. {name:<27} | {ltp:>10} | {high_52:>10} | {h_date}"
+        # Formatting for clear financial reporting
+        stock_line = (
+            f"{i}. **{name}** ({symbol})\n"
+            f"   * **Current Price:** ₹{float(ltp):,.2f} ({float(pct_chg):.2f}%)\n"
+            f"   * **52W High:** ₹{float(high_52):,.2f} (Reached: {h_date})"
         )
-        
-    return "\n".join(lines)
-
-
-@mcp.tool(description="Get stocks at 52-week low. group: 'NIFTY50' or '-' for all. exchange: 'NSE' or 'BSE'.")
-def get_52week_lows(exchange: str = "NSE", group: str = "-", record_count: int = 10) -> str:
-    try:
-        ex = _normalise_exchange(exchange)
-    except ValueError as e:
-        return str(e)
-    
-    resolved = (_resolve_group(group, exchange=ex) if group != "-" else None) or "-"
-    url = EP["52w_low"].format(ex=ex, group=resolved, record_count=record_count)
-    data, err = _get(url, f"52WkLow[{ex}]")
-    
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No 52-week low data found."
-
-    # Select exchange-specific keys from your schema
-    low_key = "n52low" if ex == "NSE" else "b52low"
-    date_key = "n52ldate" if ex == "NSE" else "b52ldate"
-
-    lines = [f"52-Week Lows — {ex} ({resolved}):"]
-    lines.append(f"{'Company Name':<30} | {'LTP':>10} | {'52W Low':>10} | {'Date'}")
-    lines.append("-" * 70)
-
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "co_name", 
-            "symbol", 
-            "price", 
-            low_key, 
-            date_key, 
-            "pchange"
-        ])
-        
-        name = p.get("co_name") or p.get("symbol", "N/A")
-        ltp = p.get("price", "N/A")
-        low_52 = p.get(low_key, "N/A")
-        l_date = p.get(date_key, "N/A")
-        
-        lines.append(
-            f"  {i:>2}. {name:<27} | {ltp:>10} | {low_52:>10} | {l_date}"
-        )
+        lines.append(stock_line)
         
     return "\n".join(lines)
 
 
 @mcp.tool(description=(
-    "Get stocks making new highs or new lows over a period. "
-    "high_or_low: 'high' or 'low'. period: 'year', 'month', or 'week'. "
-    "group: index group e.g. 'CNXMIDCAP'."
+    "Retrieves a list of stocks that have recently hit or are trading near their 52-week low. "
+    "Use this to identify stocks with significant downward momentum or potential 'bottom-fishing' "
+    "opportunities. Requires exchange ('NSE' or 'BSE') and group (use '-' for all stocks)."
+))
+def get_52week_lows(exchange: str = "NSE", group: str = "-", record_count: int = 10) -> str:
+    try:
+        ex_display = exchange.upper()
+        # API path usually expects lowercase or normalized casing
+        ex_path = "NSE" if ex_display == "NSE" else "BSE"
+    except Exception:
+        ex_path = "NSE"
+        ex_display = "NSE"
+    
+    resolved = (_resolve_group(group, exchange=ex_display) if group != "-" else None) or "-"
+    
+    # Endpoint derived from logs: FiftyTwoWeekLowEOD/{ex}/{group}/{record_count}
+    url = EP["52w_low"].format(ex=ex_path, group=resolved, record_count=record_count)
+    data, err = _get(url, f"52WkLow[{ex_display}]")
+    
+    if err:
+        return err
+        
+    rows = _rows(data)
+    if not rows:
+        return f"No 52-week low data found for group '{resolved}' on {ex_display}."
+
+    # API uses 'n' prefix for NSE and 'b' for BSE specific historical data
+    low_key = "n52low" if ex_path == "NSE" else "b52low"
+    date_key = "n52ldate" if ex_path == "NSE" else "b52ldate"
+
+    header = f"### 52-Week Low Summary: {ex_display} ({resolved})"
+    lines = [header, "---"]
+
+    for i, row in enumerate(rows, 1):
+        # Extracting based on actual API response keys
+        name = row.get("lname") or row.get("co_name") or "N/A"
+        symbol = row.get("symbol", "N/A")
+        ltp = row.get("price", 0.0)
+        low_52 = row.get(low_key, 0.0)
+        l_date_raw = row.get(date_key, "N/A")
+        pct_chg = row.get("pchange", 0.0)
+        
+        # Clean up the date string (removing timestamp if present)
+        l_date = l_date_raw.split("T")[0] if "T" in l_date_raw else l_date_raw
+        
+        # Formatting for a clean and professional response
+        stock_line = (
+            f"{i}. **{name}** ({symbol})\n"
+            f"   * **Current Price:** ₹{float(ltp):,.2f} ({float(pct_chg):.2f}%)\n"
+            f"   * **52W Low:** ₹{float(low_52):,.2f} (Reached: {l_date})"
+        )
+        lines.append(stock_line)
+        
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Retrieves stocks reaching new price highs or lows over a specified period "
+    "(e.g., 'year', 'month', 'week') for a given index group (e.g., 'CNXMIDCAP'). "
+    "Use this to identify momentum breakouts or breakdown trends in specific market segments."
 ))
 def get_new_highs_lows(
     group: str = "CNXMIDCAP", high_or_low: str = "high",
     period: str = "year", record_count: int = 10
 ) -> str:
+    """
+    Args:
+        group: The index group (e.g., 'CNXMIDCAP', 'NIFTY50').
+        high_or_low: 'high' for new highs, 'low' for new lows.
+        period: Timeframe to check ('year', 'month', or 'week').
+        record_count: Number of records to return (default 10).
+    """
     hl_type = high_or_low.lower()
     if hl_type not in ("high", "low"):
         return "high_or_low must be 'high' or 'low'."
     
-    # Normalizing period if needed by the API, otherwise keeping your logic
+    # Endpoint derived from logs: NewHigh-NewLowEOD/{group}/{high_or_low}/{period}/{record_count}
+    # Note: Exchange is implicitly handled by the group/index name in this endpoint
     url = EP["new_high_low"].format(
-        group=group.strip().upper(), high_or_low=hl_type,
-        period=period.lower(), record_count=record_count
+        group=group.strip().upper(), 
+        high_or_low=hl_type,
+        period=period.lower(), 
+        record_count=record_count
     )
     
     data, err = _get(url, f"NewHighLow[{group}/{hl_type}/{period}]")
@@ -1395,36 +1450,36 @@ def get_new_highs_lows(
         
     rows = _rows(data)
     if not rows:
-        return f"No new {hl_type} data found for the given period."
+        return f"No stocks found reaching new {hl_type}s in {group} for the '{period}' period."
 
-    lines = [f"New {hl_type.title()}s ({period.title()}) — {group.upper()}:"]
-    lines.append(f"{'Company Name':<30} | {'LTP':>10} | {'% Chg':>8}")
-    lines.append("-" * 55)
+    header = f"### New {hl_type.title()}s ({period.title()}): {group.upper()}"
+    lines = [header, "---"]
 
     for i, row in enumerate(rows, 1):
-        # Pick keys exactly as they appear in your schema
-        p = _pick(row, [
-            "co_name", 
-            "symbol", 
-            "price", 
-            "pchange", 
-            "volume",
-            "upd_time"
-        ])
+        # Extracting based on actual API response keys
+        name = row.get("lname") or row.get("co_name") or "N/A"
+        symbol = row.get("symbol", "N/A")
+        ltp = row.get("price", 0.0)
+        pct_chg = row.get("pchange", 0.0)
+        volume = row.get("volume", 0)
         
-        name = p.get("co_name") or p.get("symbol", "N/A")
-        ltp = p.get("price", "N/A")
-        pct = p.get("pchange", "N/A")
+        # Trend and status keys
+        high_52 = row.get("n52high") or row.get("b52high") or "N/A"
+        low_52 = row.get("n52low") or row.get("b52low") or "N/A"
         
-        # Use directional indicator for visual clarity
-        indicator = "▲" if hl_type == "high" else "▼"
+        # Visual indicators
+        indicator = "🟢" if hl_type == "high" else "🔴"
         
-        lines.append(
-            f"  {i:>2}. {name:<27} | {ltp:>10} | {indicator} {pct}%"
-        )   
+        # Detailed entry format
+        stock_line = (
+            f"{i}. **{name}** ({symbol})\n"
+            f"   * **Current Price:** ₹{float(ltp):,.2f} ({indicator} {float(pct_chg):.2f}%)\n"
+            f"   * **Volume:** {int(float(volume)):,}\n"
+            f"   * **52W Range:** ₹{low_52} - ₹{high_52}"
+        )
+        lines.append(stock_line)
 
     return "\n".join(lines)
-
 
 @mcp.tool(description="Get companies in a specific market index. REQUIRES index_code — call _resolve_index_code first.")
 def get_index_companies(index_code: int) -> str:
@@ -2015,49 +2070,79 @@ def get_results_today() -> str:
 #                   StandaloneConsolidated
 # ──────────────────────────────────────────────────────────────────────────────
 @mcp.tool(description=(
-    "Get historical financial ratios across the last 5 years (Pivot Table). "
-    "Covers Debt-Equity, ROCE, EPS, BVPS, ROE, and Margins. "
-    "REQUIRES co_code. report_type: 's' (standalone) or 'c' (consolidated)."
+    "Retrieves historical financial ratios (last 5 years) such as Debt-Equity, ROCE, RONW, "
+    "Current Ratio, and Profit Margins. Useful for fundamental analysis of a company's "
+    "financial health and operational efficiency."
+    "REQUIRES co_code. report_type: 's' (standalone) or 'c' (consolidated)." 
 ))
 def get_key_financial_ratios(co_code: int, report_type: str = "s") -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err: return err
 
-    t = report_type.lower() if report_type in ("s", "c") else "s"
-    url = EP["key_ratios"].format(co_code=val, t=t)
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
+    if err:
+        return err
+
+    # API expects uppercase 'S' or 'C' in the URL path based on your log
+    t_path = report_type.upper() if report_type.lower() in ("s", "c") else "S"
+    
+    url = EP["key_ratios"].format(co_code=val, t=t_path)
     data, err = _get(url, f"KeyRatios[{val}]")
-    if err: return err
+    
+    if err:
+        return err
 
     rows = _rows(data)
-    if not rows: return "No key ratio data found."
+    if not rows:
+        return f"No key ratio data found for company code {val}."
 
-    # Robust detection for Y<YYYYMM> columns
+    # Robust detection for Y<YYYYMM> columns (e.g., Y202503)
+    # We collect all year-based keys and sort them descending to show the latest first
+    all_keys = set()
+    for row in rows:
+        all_keys.update(row.keys())
+        
     year_cols = sorted(
-        [k for k in rows[0].keys() if k.startswith("Y") and k[1:].isdigit()],
+        [k for k in all_keys if k.startswith("Y") and k[1:].isdigit()],
         reverse=True
     )[:5]
 
-    def fmt_year(yc):
-        months = {"03": "Mar", "06": "Jun", "09": "Sep", "12": "Dec"}
-        return f"{months.get(yc[5:], yc[5:])} {yc[1:5]}"
+    if not year_cols:
+        return "Financial ratios are currently unavailable for this company."
 
-    header = f"{'Metric':<30} " + " | ".join(f"{fmt_year(yc):>10}" for yc in year_cols)
-    lines = [f"### Historical Key Ratios ({'Standalone' if t == 's' else 'Consolidated'})", header, "-" * len(header)]
+    def fmt_year(yc):
+        # Maps Y202503 -> Mar 2025
+        months = {"03": "Mar", "06": "Jun", "09": "Sep", "12": "Dec"}
+        year = yc[1:5]
+        month_code = yc[5:]
+        return f"{months.get(month_code, month_code)} {year}"
+
+    # Formatting the output for a clean, readable financial report
+    header_label = "Consolidated" if t_path == "C" else "Standalone"
+    lines = [f"### Historical Key Ratios ({header_label})", "---"]
 
     for row in rows:
         metric = row.get("COLUMNNAME", "").strip()
-        if not metric: continue
-        # Formatting values to 2 decimal places if they are numeric strings
-        formatted_vals = []
-        for yc in year_cols:
-            v = row.get(yc, "N/A")
-            try: formatted_vals.append(f"{float(v):>10.2f}")
-            except: formatted_vals.append(f"{str(v):>10}")
+        # Skip the 'Year End' row as it's redundant with our column headers
+        if not metric or metric == "Year End":
+            continue
             
-        lines.append(f"{metric:<30} | {' | '.join(formatted_vals)}")
+        metric_line = f"**{metric}**"
+        yearly_data = []
+        
+        for yc in year_cols:
+            val_raw = row.get(yc)
+            if val_raw is None or val_raw == "":
+                formatted_val = "N/A"
+            else:
+                try:
+                    formatted_val = f"{float(val_raw):.2f}"
+                except (ValueError, TypeError):
+                    formatted_val = str(val_raw)
+            
+            yearly_data.append(f"{fmt_year(yc)}: `{formatted_val}`")
+        
+        lines.append(f"* {metric_line} — {' | '.join(yearly_data)}")
 
     return "\n".join(lines)
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # DAILY / TTM RATIOS  (live market data)
@@ -2069,52 +2154,61 @@ def get_key_financial_ratios(co_code: int, report_type: str = "s") -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 
 @mcp.tool(description=(
-    "Get live/daily TTM market ratios: PE, PB, PEG, Market Cap, EPS (TTM), DivYield, "
-    "ROE, ROCE, ROA, EV/EBITDA, BookValue, and Margins. "
+    "Fetches comprehensive live/daily Trailing Twelve Months (TTM) financial ratios and market valuation metrics. "
+    "Provides critical investment data including Market Cap, P/E Ratio, PEG Ratio (Growth), P/B Value, Dividend Yield, "
+    "and Enterprise Value (EV). It also returns operational performance margins (Net Income, EBITDA), "
+    "efficiency ratios (ROE, ROCE, ROA), and leverage metrics like Net Debt/EBITDA. "
     "REQUIRES co_code — call resolve_nse_symbol first."
 ))
-def get_daily_ratios(co_code: int, report_type: str = "s") -> str:
+def get_daily_ratios(co_code: int, report_type: str = "S") -> str:
     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
-    t = report_type if report_type in ("s", "c") else "s"
+    
+    # Force uppercase and default to 'S' (Standalone) if input is invalid
+    t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
+    
+    # The URL line remains as requested
     url = EP["daily_ratios"].format(co_code=val, t=t)
+    
     data, err = _get(url, f"DailyRatios[{val}]")
     if err:
         return err
     rows = _rows(data)
     if not rows:
-        return "No daily ratio data found."
+        return f"No daily ratio data found for co_code {val}."
     
     r = rows[0]
-    # Included PEGRatio and MarketLot as identified in schema
+    
+    # Fields matched to your API JSON response keys
     FIELDS = [
-        "MCAP", "EPS", "PE", "PEGRatio", "PBV", "DivYield", "EV", 
-        "EV_EBITDA", "BookValue", "ROE_TTM", "ROCE_TTM", "ROA_TTM", 
-        "NetIncomeMargin", "EBITDA_Margin_TTM", "NetDebt_EBITDA_TTM"
+        "MCAP", "EPS", "PE", "PEGRatio_TTM", "PBV", "DIVYIELD", "EV", 
+        "EV_EBITDA_TTM", "BookValue", "ROE_TTM", "ROCE_TTM", "ROA_TTM", 
+        "NetIncomeMargin_TTM", "EBITDA_Margin_TTM", "NetDebt_EBITDA_TTM"
     ]
+    
     p = _pick(r, FIELDS)
     
-    lines = [f"### Daily & TTM Ratios (Standalone)" if t == 's' else "### Daily & TTM Ratios (Consolidated)"]
+    # UI Header logic
+    lines = [f"### Daily & TTM Ratios ({'Standalone' if t == 'S' else 'Consolidated'})"]
     lines.append("-" * 45)
     
-    # Adding units for LLM clarity
     units = {
         "MCAP": "Cr", "EV": "Cr", "EPS": "Rs", "BookValue": "Rs",
         "ROE_TTM": "%", "ROCE_TTM": "%", "ROA_TTM": "%", 
-        "NetIncomeMargin": "%", "EBITDA_Margin_TTM": "%", "DivYield": "%"
+        "NetIncomeMargin_TTM": "%", "EBITDA_Margin_TTM": "%", "DIVYIELD": "%"
     }
 
     for k in FIELDS:
         v = p.get(k, "N/A")
         unit = units.get(k, "")
-        # Formatting decimal values for readability
         if isinstance(v, (int, float)):
             v = f"{v:.2f}"
-        lines.append(f"  {k:<20}: {v} {unit}".strip())
+        
+        display_key = k.replace("_TTM", "")
+        lines.append(f"  {display_key:<20}: {v} {unit}".strip())
         
     return "\n".join(lines)
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # MARGIN RATIOS
@@ -2124,38 +2218,57 @@ def get_daily_ratios(co_code: int, report_type: str = "s") -> str:
 #              ShortternDebt, EPSDiluted (all surfaced via get_daily_ratios too)
 # ──────────────────────────────────────────────────────────────────────────────
 @mcp.tool(description=(
-    "Get historical margin ratios across years: PBDTIM (PBT Margin), EBTIM (EBT Margin), "
-    "PATIM (PAT/Net Profit Margin), OPM (Operating Profit Margin), CPM (Cash Profit Margin). "
-    "REQUIRES co_code — call resolve_nse_symbol first. "
-    "report_type: 's' = standalone (default), 'c' = consolidated."
+    "Retrieves historical annual margin ratios to analyze profitability trends over multiple years. "
+    "Provides key margins including PBIDTIM (Operating Profit Margin before Interest/Depreciation), "
+    "EBITM (Operating Margin), PreTaxMargin (EBT), PATM (Net Profit Margin), and CPM (Cash Profit Margin). "
+    "This tool is essential for assessing a company's operational efficiency and bottom-line growth. "
+    "REQUIRES co_code — call resolve_nse_symbol first."
 ))
-def get_margin_ratios(co_code: int, report_type: str = "s") -> str:
+def get_margin_ratios(co_code: int, report_type: str = "S") -> str:
     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
-    t = report_type if report_type in ("s", "c") else "s"
+    
+    # Standardizing to capital letters for API consistency
+    t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
+    
+    # URL line kept as per original structure
     url = EP["margin_ratios"].format(co_code=val, t=t)
+    
     data, err = _get(url, f"MarginRatios[{val}]")
     if err:
         return err
+    
     rows = _rows(data)
     if not rows:
-        return "No margin ratio data found."
-    # Correct fields per Excel: PBDTIM, EBTIM, PATIM, OPM, CPM
-    FIELDS = ["Year", "YRC", "co_code", "Type", "PBDTIM", "EBTIM", "PATIM", "OPM", "CPM"]
-    lines = [f"Margin Ratios [{'Standalone' if t == 's' else 'Consolidated'}]:"]
+        return f"No margin ratio data found for co_code {val}."
+
+    # Updated FIELDS to match the API response:
+    # PBIDTIM, EBITM, PreTaxMargin, PATM, CPM
+    FIELDS = ["YRC", "PBIDTIM", "EBITM", "PreTaxMargin", "PATM", "CPM"]
+    
+    header = "Standalone" if t == 'S' else "Consolidated"
+    lines = [f"### Historical Margin Ratios ({header})"]
+    lines.append(f"{'Year':<8} | {'OPM(%)':<8} | {'EBITM(%)':<8} | {'PBT(%)':<8} | {'PAT(%)':<8} | {'CPM(%)':<8}")
+    lines.append("-" * 65)
+
     for row in rows[:5]:
         p = _pick(row, FIELDS)
-        yr = p.get("Year") or p.get("YRC", "N/A")
-        lines.append(
-            f"  {yr}  |  OPM: {p.get('OPM', 'N/A')}%"
-            f"  PBDTIM: {p.get('PBDTIM', 'N/A')}%"
-            f"  EBTIM: {p.get('EBTIM', 'N/A')}%"
-            f"  PATIM: {p.get('PATIM', 'N/A')}%"
-            f"  CPM: {p.get('CPM', 'N/A')}%"
-        )
-    return "\n".join(lines)
+        
+        # Formatting the Year (YRC) from YYYYMM to YYYY
+        raw_yr = str(int(p.get("YRC", 0))) if p.get("YRC") else "N/A"
+        yr = raw_yr[:4] if len(raw_yr) >= 4 else raw_yr
+        
+        # Extracting values and formatting decimals
+        opm = f"{p.get('PBIDTIM', 0):.2f}"
+        ebitm = f"{p.get('EBITM', 0):.2f}"
+        pbt = f"{p.get('PreTaxMargin', 0):.2f}"
+        pat = f"{p.get('PATM', 0):.2f}"
+        cpm = f"{p.get('CPM', 0):.2f}"
+        
+        lines.append(f"{yr:<8} | {opm:<8} | {ebitm:<8} | {pbt:<8} | {pat:<8} | {cpm:<8}")
 
+    return "\n".join(lines)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # PERFORMANCE RATIOS  ← NEW (was missing from original code)

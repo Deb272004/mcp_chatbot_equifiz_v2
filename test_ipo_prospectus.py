@@ -67,7 +67,7 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-def get_profit_and_loss_results(isin):
+def get_profit_and_loss_results():
     """
     Fetches the specific Quarterly Results (P&L) for a company.
     Endpoint: /api/BalanceSheet/{co_code}/{type}
@@ -75,7 +75,7 @@ def get_profit_and_loss_results(isin):
     # Note: report_type is 'S' for Standalone, 'C' for Consolidated
     # https://equifizapis.cmots.com/api/ETFGetQuotes/NSE/INF789F1AUX7
     # https://equifizapis.cmots.com/api/ETFShareholdingEquity/INF373I01023
-    url = f"{BASE_URL}/ETFAssetAllocation/{isin}"
+    url = "https://equifizapis.cmots.com/api/MarginRatios/476/S"
     
     print(f"Requesting: {url}\n")
     
@@ -90,4 +90,4 @@ def get_profit_and_loss_results(isin):
 
 if __name__ == "__main__":
     # 476 is the code visible in your mapping image
-    get_profit_and_loss_results("INF373I01023")
+    get_profit_and_loss_results()
