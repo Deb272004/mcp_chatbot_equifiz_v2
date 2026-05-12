@@ -6190,6 +6190,7 @@ def get_scheme_nav(mf_schcode: int) -> str:
         f"  Change     : {match.get('navchng','N/A')}  ({match.get('navperchng','N/A')}%)"
     )
 
+
 @mcp.tool(description=(
     "Retrieves the fund's investment profile: includes minimum entry amounts, "
     "strategic objectives, and tax classification. Use this to explain fund "
