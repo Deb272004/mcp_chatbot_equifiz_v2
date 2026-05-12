@@ -1703,362 +1703,6 @@ def get_results_today() -> str:
 # SECTION 3 — STOCK FUNDAMENTAL RATIOS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# # @mcp.tool(description=(
-# #     "Get key fundamental ratios: ROE, ROA, ROCE, EPS, D/E ratio, net profit margin. "
-# #     "REQUIRES co_code — call resolve_nse_symbol first. "
-# #     "report_type: 's' = standalone (default), 'c' = consolidated."
-# # ))
-# # def get_key_financial_ratios(co_code: int, report_type: str = "s") -> str:
-# #     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-# #     if err:
-# #         return err
-# #     t = report_type if report_type in ("s", "c") else "s"
-# #     url = EP["key_ratios"].format(co_code=val, t=t)
-# #     data, err = _get(url, f"KeyRatios[{val}]")
-# #     if err:
-# #         return err
-# #     rows = _rows(data)
-# #     if not rows:
-# #         return "No key ratio data found."
-# #     FIELDS = ["YRC", "Year", "EPS", "BVPS", "DPS", "ROE", "ROCE", "ROA",
-# #               "DERatio", "CurrentRatio", "NetProfitMargin", "OPM"]
-# #     lines = [f"Key Financial Ratios [{'Standalone' if t=='s' else 'Consolidated'}]:"]
-# #     for row in rows[:5]:
-# #         p = _pick(row, FIELDS)
-# #         yr = p.get("Year") or p.get("YRC", "N/A")
-# #         lines.append(
-# #             f"  {yr}  |  EPS: {p.get('EPS','N/A')}"
-# #             f"  ROE: {p.get('ROE','N/A')}%"
-# #             f"  ROCE: {p.get('ROCE','N/A')}%"
-# #             f"  D/E: {p.get('DERatio','N/A')}"
-# #             f"  NPM: {p.get('NetProfitMargin','N/A')}%"
-# #         )
-# #     return "\n".join(lines)
-
-
-# @mcp.tool(description=(
-#     "Get key financial ratios for a company (Debt-Equity, Current Ratio, Inventory Turnover, ROCE, etc.). "
-#     "Returns a table of metrics across the last 5 reporting periods. "
-#     "Values are mapped from COLUMNNAME rows and Y<YYYYMM> columns. "
-#     "REQUIRES co_code — call resolve_nse_symbol first. "
-#     "report_type: 's' = standalone (default), 'c' = consolidated."
-# ))
-# def get_key_financial_ratios(co_code: int, report_type: str = "s") -> str:
-#     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-#     if err:
-#         return err
-        
-#     t = report_type.lower() if report_type in ("s", "c") else "s"
-#     url = EP["key_ratios"].format(co_code=val, t=t)
-#     data, err = _get(url, f"KeyRatios[{val}]")
-    
-#     if err:
-#         return err
-        
-#     rows = _rows(data)  # Extract data["data"]
-#     if not rows:
-#         return "No key ratio data found."
-
-#     # 1. Detect dynamic year columns (e.g., Y202503, Y202403)
-#     # We check the first row to find keys that match the year pattern
-#     year_cols = sorted(
-#         [k for k in rows[0].keys() if k.startswith("Y") and k[1:].isdigit()],
-#         reverse=True
-#     )[:5]
-
-#     # 2. Helper to format 'Y202503' into 'Mar 2025'
-#     def fmt_year(yc):
-#         try:
-#             yr = yc[1:5]
-#             mo_code = yc[5:]
-#             months = {'03': 'Mar', '06': 'Jun', '09': 'Sep', '12': 'Dec'}
-#             return f"{months.get(mo_code, mo_code)} {yr}"
-#         except Exception:
-#             return yc
-
-#     # 3. Build Table Header
-#     header = f"{'Metric':<35} " + "  ".join(f"{fmt_year(yc):>10}" for yc in year_cols)
-#     lines = [
-#         f"### Key Financial Ratios [{'Standalone' if t == 's' else 'Consolidated'}]",
-#         header,
-#         "-" * (35 + (12 * len(year_cols)))
-#     ]
-
-#     # 4. Iterate through rows (Metrics) and extract values for each year column
-#     for row in rows:
-#         metric_name = row.get("COLUMNNAME", "").strip()
-#         if not metric_name:
-#             continue
-        
-#         # Build the row values string
-#         vals = "  ".join(f"{str(row.get(yc, 'N/A')):>10}" for yc in year_cols)
-#         lines.append(f"{metric_name:<35} {vals}")
-
-#     return "\n".join(lines)
-
-# @mcp.tool(description=(
-#     "Get live/daily market ratios: PE, PB, Market Cap, EPS (TTM), dividend yield, 52W high/low. "
-#     "REQUIRES co_code — call resolve_nse_symbol first. "
-#     "report_type: 's' = standalone (default), 'c' = consolidated."
-# ))
-# def get_daily_ratios(co_code: int, report_type: str = "s") -> str:
-#     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-#     if err:
-#         return err
-#     t = report_type if report_type in ("s", "c") else "s"
-#     url = EP["daily_ratios"].format(co_code=val, t=t)
-#     data, err = _get(url, f"DailyRatios[{val}]")
-#     if err:
-#         return err
-#     rows = _rows(data)
-#     if not rows:
-#         return "No daily ratio data found."
-#     r = rows[0]
-#     p = _pick(r, ["CompanyName", "PE", "PB", "MCAP", "EPS", "DivYield",
-#                   "High52W", "Low52W", "FaceValue", "BookValue"])
-#     lines = [f"Daily Market Ratios — {p.get('CompanyName','N/A')}:"]
-#     for k, v in p.items():
-#         if k != "CompanyName":
-#             lines.append(f"  {k:<15}: {v}")
-#     return "\n".join(lines)
-
-
-# @mcp.tool(description=(
-#     "Get margin ratios: Gross Margin, EBITDA Margin, EBIT Margin, Net Profit Margin, PAT Margin. "
-#     "REQUIRES co_code. report_type: 's' or 'c'."
-# ))
-# def get_margin_ratios(co_code: int, report_type: str = "s") -> str:
-#     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-#     if err:
-#         return err
-#     t = report_type if report_type in ("s", "c") else "s"
-#     url = EP["margin_ratios"].format(co_code=val, t=t)
-#     data, err = _get(url, f"MarginRatios[{val}]")
-#     if err:
-#         return err
-#     rows = _rows(data)
-#     if not rows:
-#         return "No margin ratio data found."
-#     lines = [f"Margin Ratios [{'Standalone' if t=='s' else 'Consolidated'}]:"]
-#     for row in rows[:5]:
-#         p = _pick(row, ["Year", "YRC", "GrossMargin", "EBITDAMargin", "EBITMargin",
-#                         "NetProfitMargin", "PATMargin", "OPM"])
-#         yr = p.get("Year") or p.get("YRC", "N/A")
-#         lines.append(
-#             f"  {yr}  |  GPM: {p.get('GrossMargin','N/A')}%"
-#             f"  EBITDA: {p.get('EBITDAMargin','N/A')}%"
-#             f"  NPM: {p.get('NetProfitMargin','N/A')}%"
-#         )
-#     return "\n".join(lines)
-
-
-# @mcp.tool(description=(
-#     "Get valuation ratios: PE, PB, EV/EBITDA, Price/Sales, Dividend Yield. "
-#     "REQUIRES co_code. report_type: 's' or 'c'."
-# ))
-# def get_valuation_ratios(co_code: int, report_type: str = "s") -> str:
-#     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-#     if err:
-#         return err
-#     t = report_type if report_type in ("s", "c") else "s"
-#     url = EP["valuation_ratios"].format(co_code=val, t=t)
-#     data, err = _get(url, f"ValuationRatios[{val}]")
-#     if err:
-#         return err
-#     rows = _rows(data)
-#     if not rows:
-#         return "No valuation ratio data found."
-#     lines = [f"Valuation Ratios [{'Standalone' if t=='s' else 'Consolidated'}]:"]
-#     for row in rows[:5]:
-#         p = _pick(row, ["Year", "YRC", "PE", "PB", "EVEBITDAMultiple",
-#                         "PriceSales", "DivYield", "MCAP", "EV"])
-#         yr = p.get("Year") or p.get("YRC", "N/A")
-#         lines.append(
-#             f"  {yr}  |  PE: {p.get('PE','N/A')}x"
-#             f"  PB: {p.get('PB','N/A')}x"
-#             f"  EV/EBITDA: {p.get('EVEBITDAMultiple','N/A')}x"
-#             f"  Div Yield: {p.get('DivYield','N/A')}%"
-#         )
-#     return "\n".join(lines)
-
-
-# @mcp.tool(description=(
-#     "Get return ratios: ROE, ROCE, ROA, ROIC across years. "
-#     "REQUIRES co_code. report_type: 's' or 'c'."
-# ))
-# def get_return_ratios(co_code: int, report_type: str = "s") -> str:
-#     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-#     if err:
-#         return err
-#     t = report_type if report_type in ("s", "c") else "s"
-#     url = EP["return_ratios"].format(co_code=val, t=t)
-#     data, err = _get(url, f"ReturnRatios[{val}]")
-#     if err:
-#         return err
-#     rows = _rows(data)
-#     if not rows:
-#         return "No return ratio data found."
-#     lines = [f"Return Ratios [{'Standalone' if t=='s' else 'Consolidated'}]:"]
-#     for row in rows[:5]:
-#         p = _pick(row, ["Year", "YRC", "ROE", "ROCE", "ROA", "ROIC"])
-#         yr = p.get("Year") or p.get("YRC", "N/A")
-#         lines.append(
-#             f"  {yr}  |  ROE: {p.get('ROE','N/A')}%"
-#             f"  ROCE: {p.get('ROCE','N/A')}%"
-#             f"  ROA: {p.get('ROA','N/A')}%"
-#         )
-#     return "\n".join(lines)
-
-
-# @mcp.tool(description=(
-#     "Get growth ratios: Revenue growth, PAT growth, EPS growth across years. "
-#     "REQUIRES co_code. report_type: 's' or 'c'."
-# ))
-# def get_growth_ratios(co_code: int, report_type: str = "s") -> str:
-#     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-#     if err:
-#         return err
-#     t = report_type if report_type in ("s", "c") else "s"
-#     url = EP["growth_ratio"].format(co_code=val, t=t)
-#     data, err = _get(url, f"GrowthRatios[{val}]")
-#     if err:
-#         return err
-#     rows = _rows(data)
-#     if not rows:
-#         return "No growth ratio data found."
-#     lines = [f"Growth Ratios [{'Standalone' if t=='s' else 'Consolidated'}]:"]
-#     for row in rows[:5]:
-#         p = _pick(row, ["Year", "YRC", "NetSalesGrowth", "PATGrowth", "EPSGrowth",
-#                         "EBITDAGrowth", "TotalIncomeGrowth"])
-#         yr = p.get("Year") or p.get("YRC", "N/A")
-#         lines.append(
-#             f"  {yr}  |  Rev Growth: {p.get('NetSalesGrowth','N/A')}%"
-#             f"  PAT Growth: {p.get('PATGrowth','N/A')}%"
-#             f"  EPS Growth: {p.get('EPSGrowth','N/A')}%"
-#         )
-#     return "\n".join(lines)
-
-
-# @mcp.tool(description=(
-#     "Get liquidity ratios: Current Ratio, Quick Ratio, Cash Ratio. "
-#     "REQUIRES co_code. report_type: 's' or 'c'."
-# ))
-# def get_liquidity_ratios(co_code: int, report_type: str = "s") -> str:
-#     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-#     if err:
-#         return err
-#     t = report_type if report_type in ("s", "c") else "s"
-#     url = EP["liquidity_ratios"].format(co_code=val, t=t)
-#     data, err = _get(url, f"LiquidityRatios[{val}]")
-#     if err:
-#         return err
-#     rows = _rows(data)
-#     if not rows:
-#         return "No liquidity ratio data found."
-#     lines = [f"Liquidity Ratios [{'Standalone' if t=='s' else 'Consolidated'}]:"]
-#     for row in rows[:5]:
-#         p = _pick(row, ["Year", "YRC", "CurrentRatio", "QuickRatio", "CashRatio"])
-#         yr = p.get("Year") or p.get("YRC", "N/A")
-#         lines.append(
-#             f"  {yr}  |  Current: {p.get('CurrentRatio','N/A')}x"
-#             f"  Quick: {p.get('QuickRatio','N/A')}x"
-#             f"  Cash: {p.get('CashRatio','N/A')}x"
-#         )
-#     return "\n".join(lines)
-
-
-# @mcp.tool(description=(
-#     "Get solvency/leverage ratios: D/E Ratio, Interest Coverage, Debt/EBITDA. "
-#     "REQUIRES co_code. report_type: 's' or 'c'."
-# ))
-# def get_solvency_ratios(co_code: int, report_type: str = "s") -> str:
-#     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-#     if err:
-#         return err
-#     t = report_type if report_type in ("s", "c") else "s"
-#     url = EP["solvency_ratios"].format(co_code=val, t=t)
-#     data, err = _get(url, f"SolvencyRatios[{val}]")
-#     if err:
-#         return err
-#     rows = _rows(data)
-#     if not rows:
-#         return "No solvency ratio data found."
-#     lines = [f"Solvency / Leverage Ratios [{'Standalone' if t=='s' else 'Consolidated'}]:"]
-#     for row in rows[:5]:
-#         p = _pick(row, ["Year", "YRC", "DERatio", "InterestCoverage", "DebtEBITDA",
-#                         "TotalDebtEquity", "LTDebtEquity"])
-#         yr = p.get("Year") or p.get("YRC", "N/A")
-#         lines.append(
-#             f"  {yr}  |  D/E: {p.get('DERatio','N/A')}x"
-#             f"  Int Coverage: {p.get('InterestCoverage','N/A')}x"
-#             f"  Debt/EBITDA: {p.get('DebtEBITDA','N/A')}x"
-#         )
-#     return "\n".join(lines)
-
-
-# @mcp.tool(description=(
-#     "Get efficiency ratios: Asset Turnover, Inventory Turnover, Receivables Turnover, Working Capital Days. "
-#     "REQUIRES co_code. report_type: 's' or 'c'."
-# ))
-# def get_efficiency_ratios(co_code: int, report_type: str = "s") -> str:
-#     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-#     if err:
-#         return err
-#     t = report_type if report_type in ("s", "c") else "s"
-#     url = EP["efficiency_ratios"].format(co_code=val, t=t)
-#     data, err = _get(url, f"EfficiencyRatios[{val}]")
-#     if err:
-#         return err
-#     rows = _rows(data)
-#     if not rows:
-#         return "No efficiency ratio data found."
-#     lines = [f"Efficiency Ratios [{'Standalone' if t=='s' else 'Consolidated'}]:"]
-#     for row in rows[:5]:
-#         p = _pick(row, ["Year", "YRC", "AssetTurnover", "InventoryTurnover",
-#                         "ReceivablesTurnover", "FixedAssetTurnover",
-#                         "DebtorDays", "InventoryDays", "CreditorDays"])
-#         yr = p.get("Year") or p.get("YRC", "N/A")
-#         lines.append(
-#             f"  {yr}  |  Asset T/O: {p.get('AssetTurnover','N/A')}x"
-#             f"  Inv T/O: {p.get('InventoryTurnover','N/A')}x"
-#             f"  Debtor Days: {p.get('DebtorDays','N/A')}"
-#         )
-#     return "\n".join(lines)
-
-
-# @mcp.tool(description=(
-#     "Get cash flow ratios: Operating CF/Sales, FCF Yield, Capex/Sales. "
-#     "REQUIRES co_code. report_type: 's' or 'c'."
-# ))
-# def get_cashflow_ratios(co_code: int, report_type: str = "s") -> str:
-#     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-#     if err:
-#         return err
-#     t = report_type if report_type in ("s", "c") else "s"
-#     url = EP["cashflow_ratios"].format(co_code=val, t=t)
-#     data, err = _get(url, f"CashflowRatios[{val}]")
-#     if err:
-#         return err
-#     rows = _rows(data)
-#     if not rows:
-#         return "No cash flow ratio data found."
-#     lines = [f"Cash Flow Ratios [{'Standalone' if t=='s' else 'Consolidated'}]:"]
-#     for row in rows[:5]:
-#         p = _pick(row, ["Year", "YRC", "OperatingCFSales", "FCFYield",
-#                         "CapexSales", "FreeCashFlow", "OperatingCF"])
-#         yr = p.get("Year") or p.get("YRC", "N/A")
-#         lines.append(
-#             f"  {yr}  |  OCF/Sales: {p.get('OperatingCFSales','N/A')}%"
-#             f"  FCF Yield: {p.get('FCFYield','N/A')}%"
-#             f"  Capex/Sales: {p.get('CapexSales','N/A')}%"
-#         )
-#     return "\n".join(lines)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 3 — STOCK FUNDAMENTAL RATIOS
-# ═══════════════════════════════════════════════════════════════════════════════
-
 # ──────────────────────────────────────────────────────────────────────────────
 # KEY FINANCIAL RATIOS
 # EOD fields  : COLUMNNAME, StandaloneConsolidated  (pivot table — dynamic year cols)
@@ -2309,36 +1953,37 @@ def get_performance_ratios(co_code: int, report_type: str = "s") -> str:
 # EOD fields : co_code, Type, FixedCapitals, SalesReceivablesDays,
 #              InventoryDays, CreditorDays, OPM  (NOT AssetTurnover etc.)
 # ──────────────────────────────────────────────────────────────────────────────
-@mcp.tool(description=(
-    "Get historical efficiency ratios across years: FixedCapitals (Fixed Asset Turnover), "
-    "SalesReceivablesDays (Debtor Days), InventoryDays, CreditorDays, OPM. "
-    "REQUIRES co_code — call resolve_nse_symbol first. "
-    "report_type: 's' = standalone (default), 'c' = consolidated."
-))
-def get_efficiency_ratios(co_code: int, report_type: str = "s") -> str:
+def get_efficiency_ratios(co_code: int, report_type: str = "S") -> str:
     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
-    t = report_type if report_type in ("s", "c") else "s"
+    
+    # Ensure uppercase 'S' or 'C' as required by the API
+    t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
+    
     url = EP["efficiency_ratios"].format(co_code=val, t=t)
     data, err = _get(url, f"EfficiencyRatios[{val}]")
     if err:
         return err
+    
     rows = _rows(data)
     if not rows:
         return "No efficiency ratio data found."
-    # Corrected fields per Excel
-    FIELDS = ["Year", "YRC", "co_code", "Type",
-              "FixedCapitals", "SalesReceivablesDays", "InventoryDays", "CreditorDays", "OPM"]
-    lines = [f"Efficiency Ratios [{'Standalone' if t == 's' else 'Consolidated'}]:"]
+
+    # Updated to match the actual API response keys
+    FIELDS = ["Year", "YRC", "co_code", "FixedCapitals_Sales", 
+              "ReceivableDays", "InventoryDays", "PayableDays", "OPM"]
+
+    lines = [f"Efficiency Ratios [{'Standalone' if t == 'S' else 'Consolidated'}]:"]
     for row in rows[:5]:
         p = _pick(row, FIELDS)
-        yr = p.get("Year") or p.get("YRC", "N/A")
+        yr = p.get("Year") or str(int(p.get("YRC", 0))) or "N/A"
+        
         lines.append(
-            f"  {yr}  |  Fixed Cap T/O: {p.get('FixedCapitals', 'N/A')}"
-            f"  Debtor Days: {p.get('SalesReceivablesDays', 'N/A')}"
-            f"  Inv Days: {p.get('InventoryDays', 'N/A')}"
-            f"  Creditor Days: {p.get('CreditorDays', 'N/A')}"
+            f"  {yr}  |  Fixed Cap T/O: {p.get('FixedCapitals_Sales', 'N/A'):.2f}"
+            f"  Debtor Days: {p.get('ReceivableDays', 'N/A'):.2f}"
+            f"  Inv Days: {p.get('InventoryDays', 'N/A'):.2f}"
+            f"  Creditor Days: {p.get('PayableDays', 'N/A'):.2f}"
             f"  OPM: {p.get('OPM', 'N/A')}%"
         )
     return "\n".join(lines)
@@ -2349,39 +1994,48 @@ def get_efficiency_ratios(co_code: int, report_type: str = "s") -> str:
 # EOD fields : co_code, Type, TotalDebt_Equity, LongTermDebt_Equity,
 #              QuickRatio, InterestCover, TotalDebt_MCap
 # ──────────────────────────────────────────────────────────────────────────────
-@mcp.tool(description=(
-    "Get historical financial stability/solvency ratios across years: "
-    "TotalDebt_Equity (D/E), LongTermDebt_Equity (LT D/E), QuickRatio, "
-    "InterestCover (Interest Coverage), TotalDebt_MCap. "
-    "REQUIRES co_code — call resolve_nse_symbol first. "
-    "report_type: 's' = standalone (default), 'c' = consolidated."
-))
-def get_financial_stability_ratios(co_code: int, report_type: str = "s") -> str:
+def get_financial_stability_ratios(co_code: int, report_type: str = "S") -> str:
     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
-    t = report_type if report_type in ("s", "c") else "s"
+    
+    # API strictly requires uppercase 'S' or 'C'
+    t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
+    
     url = EP["financial_stability_ratios"].format(co_code=val, t=t)
     data, err = _get(url, f"FinancialStabilityRatios[{val}]")
     if err:
         return err
+    
     rows = _rows(data)
     if not rows:
         return "No financial stability ratio data found."
-    FIELDS = ["Year", "YRC", "co_code", "Type",
-              "TotalDebt_Equity", "LongTermDebt_Equity",
-              "QuickRatio", "InterestCover", "TotalDebt_MCap"]
-    lines = [f"Financial Stability Ratios [{'Standalone' if t == 's' else 'Consolidated'}]:"]
+    
+    # Fields based on your successful API response
+    FIELDS = ["Year", "YRC", "co_code", "TotalDebt_Equity", 
+              "LongTermDebt_Equity", "QuickRatio", "InterestCover", "TotalDebt_MCap"]
+    
+    lines = [f"Financial Stability Ratios [{'Standalone' if t == 'S' else 'Consolidated'}]:"]
+    
     for row in rows[:5]:
         p = _pick(row, FIELDS)
-        yr = p.get("Year") or p.get("YRC", "N/A")
+        
+        # Format YRC (e.g., 202503.0) to a cleaner string if Year is missing
+        yr_raw = p.get("Year") or p.get("YRC")
+        yr = str(int(yr_raw)) if yr_raw else "N/A"
+        
+        # Helper to format floats to 2 decimal places if they exist
+        def fmt(val):
+            return f"{val:.2f}" if isinstance(val, (int, float)) else "N/A"
+
         lines.append(
-            f"  {yr}  |  D/E: {p.get('TotalDebt_Equity', 'N/A')}x"
-            f"  LT D/E: {p.get('LongTermDebt_Equity', 'N/A')}x"
-            f"  Quick: {p.get('QuickRatio', 'N/A')}x"
-            f"  Int Cover: {p.get('InterestCover', 'N/A')}x"
-            f"  Debt/MCap: {p.get('TotalDebt_MCap', 'N/A')}"
+            f"  {yr}  |  D/E: {fmt(p.get('TotalDebt_Equity'))}x"
+            f"  LT D/E: {fmt(p.get('LongTermDebt_Equity'))}x"
+            f"  Quick: {fmt(p.get('QuickRatio'))}x"
+            f"  Int Cover: {fmt(p.get('InterestCover'))}x"
+            f"  Debt/MCap: {fmt(p.get('TotalDebt_MCap'))}"
         )
+        
     return "\n".join(lines)
 
 
@@ -2390,39 +2044,50 @@ def get_financial_stability_ratios(co_code: int, report_type: str = "s") -> str:
 # EOD fields : co_code, Type, Price_BookValue, PE, DividendField, EV, EBITDA,
 #              EV_EBITDA  (NOT PriceSales, DivYield as named in old code)
 # ──────────────────────────────────────────────────────────────────────────────
-@mcp.tool(description=(
-    "Get historical valuation ratios across years: PE, Price_BookValue (PB), "
-    "EV, EBITDA, EV_EBITDA, DividendField (Dividend Yield). "
-    "REQUIRES co_code — call resolve_nse_symbol first. "
-    "report_type: 's' = standalone (default), 'c' = consolidated."
-))
-def get_valuation_ratios(co_code: int, report_type: str = "s") -> str:
+def get_valuation_ratios(co_code: int, report_type: str = "S") -> str:
     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
-    t = report_type if report_type in ("s", "c") else "s"
+    
+    # Standardize to uppercase for API consistency
+    t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
+    
     url = EP["valuation_ratios"].format(co_code=val, t=t)
     data, err = _get(url, f"ValuationRatios[{val}]")
     if err:
         return err
+    
     rows = _rows(data)
     if not rows:
         return "No valuation ratio data found."
-    # Corrected fields per Excel: Price_BookValue, DividendField (not PriceSales/DivYield)
-    FIELDS = ["Year", "YRC", "co_code", "Type",
-              "Price_BookValue", "PE", "DividendField", "EV", "EBITDA", "EV_EBITDA"]
-    lines = [f"Valuation Ratios [{'Standalone' if t == 's' else 'Consolidated'}]:"]
+
+    # Updated FIELDS to match actual API response keys
+    # Note: Using DividendYield instead of DividendField
+    FIELDS = ["Year", "YRC", "co_code", "PE", "Price_BookValue", 
+              "DividendYield", "EV_EBITDA", "Mcap_Sales"]
+    
+    lines = [f"Valuation Ratios [{'Standalone' if t == 'S' else 'Consolidated'}]:"]
+    
     for row in rows[:5]:
         p = _pick(row, FIELDS)
-        yr = p.get("Year") or p.get("YRC", "N/A")
+        
+        # Clean up the year formatting from YRC (e.g., 202503 -> 2025)
+        yr_raw = p.get("Year") or p.get("YRC")
+        yr = str(int(yr_raw))[:4] if yr_raw else "N/A"
+        
+        # Helper for clean float formatting
+        def f(k):
+            v = p.get(k)
+            return f"{v:.2f}" if isinstance(v, (int, float)) else "N/A"
+
         lines.append(
-            f"  {yr}  |  PE: {p.get('PE', 'N/A')}x"
-            f"  PB: {p.get('Price_BookValue', 'N/A')}x"
-            f"  EV: {p.get('EV', 'N/A')}"
-            f"  EBITDA: {p.get('EBITDA', 'N/A')}"
-            f"  EV/EBITDA: {p.get('EV_EBITDA', 'N/A')}x"
-            f"  Div: {p.get('DividendField', 'N/A')}"
+            f"  {yr}  |  PE: {f('PE')}x"
+            f"  PB: {f('Price_BookValue')}x"
+            f"  EV/EBITDA: {f('EV_EBITDA')}x"
+            f"  Div Yield: {f('DividendYield')}%"
+            f"  Mcap/Sales: {f('Mcap_Sales')}x"
         )
+        
     return "\n".join(lines)
 
 
@@ -2437,33 +2102,52 @@ def get_valuation_ratios(co_code: int, report_type: str = "s") -> str:
     "REQUIRES co_code — call resolve_nse_symbol first. "
     "report_type: 's' = standalone (default), 'c' = consolidated."
 ))
-def get_cashflow_ratios(co_code: int, report_type: str = "s") -> str:
+def get_cashflow_ratios(co_code: int, report_type: str = "S") -> str:
     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
-    t = report_type if report_type in ("s", "c") else "s"
+    
+    # API requires uppercase 'S' or 'C'
+    t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
+    
     url = EP["cashflow_ratios"].format(co_code=val, t=t)
     data, err = _get(url, f"CashflowRatios[{val}]")
     if err:
         return err
+    
     rows = _rows(data)
     if not rows:
         return "No cash flow ratio data found."
-    # Corrected fields per Excel
-    FIELDS = ["Year", "YRC", "co_code", "Type",
-              "CashFlowPerShare", "PriceCashFlowRatio",
-              "PriceFreeCashFlow", "SalestoCashFlow", "SalestoCashFlowRatio"]
-    lines = [f"Cash Flow Ratios [{'Standalone' if t == 's' else 'Consolidated'}]:"]
+
+    # Mapped to the actual keys returned in your JSON debug log
+    FIELDS = [
+        "Year", "YRC", "co_code", 
+        "CashFlowPerShare", "PricetoCashFlowRatio", 
+        "FreeCashFlowperShare", "PricetoFreeCashFlow", "FreeCashFlowYield"
+    ]
+    
+    lines = [f"Cash Flow Ratios [{'Standalone' if t == 'S' else 'Consolidated'}]:"]
+    
     for row in rows[:5]:
         p = _pick(row, FIELDS)
-        yr = p.get("Year") or p.get("YRC", "N/A")
+        
+        # Format year from YRC (202503.0 -> 2025)
+        yr_raw = p.get("Year") or p.get("YRC")
+        yr = str(int(yr_raw))[:4] if yr_raw else "N/A"
+        
+        # Helper for 2-decimal float formatting
+        def f(k):
+            v = p.get(k)
+            return f"{v:.2f}" if isinstance(v, (int, float)) else "N/A"
+
         lines.append(
-            f"  {yr}  |  CF/Share: {p.get('CashFlowPerShare', 'N/A')}"
-            f"  P/CF: {p.get('PriceCashFlowRatio', 'N/A')}x"
-            f"  P/FCF: {p.get('PriceFreeCashFlow', 'N/A')}x"
-            f"  Sales/CF: {p.get('SalestoCashFlow', 'N/A')}"
-            f"  Sales/CF Ratio: {p.get('SalestoCashFlowRatio', 'N/A')}"
+            f"  {yr}  |  CFPS: {f('CashFlowPerShare')}"
+            f"  P/CF: {f('PricetoCashFlowRatio')}x"
+            f"  FCFPS: {f('FreeCashFlowperShare')}"
+            f"  P/FCF: {f('PricetoFreeCashFlow')}x"
+            f"  FCF Yield: {f('FreeCashFlowYield')}%"
         )
+        
     return "\n".join(lines)
 
 
@@ -2471,7 +2155,11 @@ def get_cashflow_ratios(co_code: int, report_type: str = "s") -> str:
 # GROWTH RATIOS
 # Fields (Yearly/C): NetSalesGrowth, PATGrowth, EBITDAGrowth, PBTGrowth, EPSGrowth
 # ──────────────────────────────────────────────────────────────────────────────
-@mcp.tool(description="Get historical growth ratios: Revenue, PAT, EBITDA, PBT, and EPS growth.")
+@mcp.tool(description="Provides Year-over-Year (YoY) growth percentages for Net Sales, "
+          "EBITDA, EBIT, PAT, and EPS. Use this when the user asks for historical performance " 
+          "trends or wants to see how fast the company is scaling."
+          "REQUIRES co_code — call resolve_nse_symbol first. "
+           "report_type: 's' = standalone (default), 'c' = consolidated.")
 def get_growth_ratios(co_code: int, report_type: str = "s") -> str:
     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err: return err
@@ -2510,36 +2198,52 @@ def get_growth_ratios(co_code: int, report_type: str = "s") -> str:
     "REQUIRES co_code — call resolve_nse_symbol first. "
     "report_type: 's' = standalone (default), 'c' = consolidated."
 ))
-def get_liquidity_ratios(co_code: int, report_type: str = "s") -> str:
+def get_liquidity_ratios(co_code: int, report_type: str = "S") -> str:
     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
-    t = report_type if report_type in ("s", "c") else "s"
+    
+    # API requires uppercase 'S' or 'C'
+    t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
+    
     url = EP["liquidity_ratios"].format(co_code=val, t=t)
     data, err = _get(url, f"LiquidityRatios[{val}]")
     if err:
         return err
+    
     rows = _rows(data)
     if not rows:
         return "No liquidity ratio data found."
-    # Corrected fields per Excel (banking-oriented liquidity metrics)
-    FIELDS = ["Year", "YRC", "co_code", "Type",
-              "Loans_to_Deposits", "Cash_vs_Deposits",
-              "Incl_an_to_Deposit", "Cmdr_to_Deposits",
-              "InterestExpended_to_Ts", "InterestExpended_to_Tl", "CAR"]
-    lines = [f"Liquidity Ratios [{'Standalone' if t == 's' else 'Consolidated'}]:"]
+
+    # Updated to match the actual API keys from your JSON response
+    FIELDS = [
+        "YRC", "Loans_to_Deposits", "Cash_to_Deposits", 
+        "Investment_toDeposits", "IncLoan_to_Deposit", "CASA"
+    ]
+    
+    lines = [f"Liquidity Ratios [{'Standalone' if t == 'S' else 'Consolidated'}]:"]
+    
     for row in rows[:5]:
         p = _pick(row, FIELDS)
-        yr = p.get("Year") or p.get("YRC", "N/A")
-        lines.append(
-            f"  {yr}  |  Loans/Dep: {p.get('Loans_to_Deposits', 'N/A')}"
-            f"  Cash/Dep: {p.get('Cash_vs_Deposits', 'N/A')}"
-            f"  Int Exp/TS: {p.get('InterestExpended_to_Ts', 'N/A')}"
-            f"  Int Exp/TL: {p.get('InterestExpended_to_Tl', 'N/A')}"
-            f"  CAR: {p.get('CAR', 'N/A')}%"
-        )
-    return "\n".join(lines)
+        
+        # Format year from YRC (202503.0 -> 2025)
+        yr_raw = p.get("YRC")
+        yr = str(int(yr_raw))[:4] if yr_raw else "N/A"
+        
+        # Helper for 2-decimal float formatting
+        def f(k):
+            v = p.get(k)
+            return f"{v:.2f}" if isinstance(v, (int, float)) else "N/A"
 
+        lines.append(
+            f"  {yr}  |  Loans/Dep: {f('Loans_to_Deposits')}"
+            f"  Cash/Dep: {f('Cash_to_Deposits')}"
+            f"  Inv/Dep: {f('Investment_toDeposits')}"
+            f"  Inc. L/D: {f('IncLoan_to_Deposit')}"
+            f"  CASA: {f('CASA')}%"
+        )
+        
+    return "\n".join(lines)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # SOLVENCY / LEVERAGE RATIOS  (kept from original; field names verified)
@@ -2552,31 +2256,53 @@ def get_liquidity_ratios(co_code: int, report_type: str = "s") -> str:
     "REQUIRES co_code — call resolve_nse_symbol first. "
     "report_type: 's' = standalone (default), 'c' = consolidated."
 ))
-def get_solvency_ratios(co_code: int, report_type: str = "s") -> str:
+def get_solvency_ratios(co_code: int, report_type: str = "S") -> str:
     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
-    t = report_type if report_type in ("s", "c") else "s"
+    
+    # Enforce uppercase for API consistency
+    t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
+    
     url = EP["solvency_ratios"].format(co_code=val, t=t)
     data, err = _get(url, f"SolvencyRatios[{val}]")
     if err:
         return err
+    
     rows = _rows(data)
     if not rows:
         return "No solvency ratio data found."
-    FIELDS = ["Year", "YRC", "DERatio", "InterestCoverage", "DebtEBITDA",
-              "TotalDebtEquity", "LTDebtEquity"]
-    lines = [f"Solvency / Leverage Ratios [{'Standalone' if t == 's' else 'Consolidated'}]:"]
+
+    # Updated to match the specific prefixed keys in the JSON response
+    # Note: Using lowercase 'yrc' as per your debug log
+    FIELDS = [
+        "yrc", 
+        "solvency_totaldebttoequityratio", 
+        "solvency_interestcoverageratio", 
+        "solvency_currentratio"
+    ]
+    
+    lines = [f"Solvency Ratios [{'Standalone' if t == 'S' else 'Consolidated'}]:"]
+    
     for row in rows[:5]:
         p = _pick(row, FIELDS)
-        yr = p.get("Year") or p.get("YRC", "N/A")
-        lines.append(
-            f"  {yr}  |  D/E: {p.get('DERatio', 'N/A')}x"
-            f"  Int Coverage: {p.get('InterestCoverage', 'N/A')}x"
-            f"  Debt/EBITDA: {p.get('DebtEBITDA', 'N/A')}x"
-        )
-    return "\n".join(lines)
+        
+        # API returned lowercase 'yrc' for this specific endpoint
+        yr_raw = p.get("yrc")
+        yr = str(int(yr_raw))[:4] if yr_raw else "N/A"
+        
+        # Helper for clean float formatting
+        def f(k):
+            v = p.get(k)
+            return f"{v:.2f}" if isinstance(v, (int, float)) else "N/A"
 
+        lines.append(
+            f"  {yr}  |  D/E: {f('solvency_totaldebttoequityratio')}x"
+            f"  Int Coverage: {f('solvency_interestcoverageratio')}x"
+            f"  Current Ratio: {f('solvency_currentratio')}x"
+        )
+        
+    return "\n".join(lines)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # RETURN RATIOS  (renamed from old get_return_ratios; field names verified)
@@ -2590,29 +2316,37 @@ def get_solvency_ratios(co_code: int, report_type: str = "s") -> str:
     "REQUIRES co_code — call resolve_nse_symbol first. "
     "report_type: 's' = standalone (default), 'c' = consolidated."
 ))
-def get_return_ratios(co_code: int, report_type: str = "s") -> str:
+def get_return_ratios(co_code: int, report_type: str = "S") -> str:
     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
-    t = report_type if report_type in ("s", "c") else "s"
+    if err: return err
+    t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
+    
     url = EP["return_ratios"].format(co_code=val, t=t)
     data, err = _get(url, f"ReturnRatios[{val}]")
-    if err:
-        return err
+    if err: return err
+    
     rows = _rows(data)
-    if not rows:
-        return "No return ratio data found."
-    FIELDS = ["Year", "YRC", "ROE", "ROCE", "ROA", "ROIC"]
-    lines = [f"Return Ratios [{'Standalone' if t == 's' else 'Consolidated'}]:"]
+    if not rows: return "No return data found."
+
+    FIELDS = [
+        "YRC", "Return_ROE", "Return_ROE_NetProfit", "Return_ROE_Networth",
+        "Return_ROCE", "Return_ROCE_EBIT", "Return_ROCE_CapitalEmployed",
+        "Return_ReturnOnAssets"
+    ]
+    
+    lines = [f"### Profitability & Return Analysis ({'Standalone' if t == 'S' else 'Consolidated'})"]
     for row in rows[:5]:
         p = _pick(row, FIELDS)
-        yr = p.get("Year") or p.get("YRC", "N/A")
-        lines.append(
-            f"  {yr}  |  ROE: {p.get('ROE', 'N/A')}%"
-            f"  ROCE: {p.get('ROCE', 'N/A')}%"
-            f"  ROA: {p.get('ROA', 'N/A')}%"
-            f"  ROIC: {p.get('ROIC', 'N/A')}%"
-        )
+        yr = str(int(p.get("YRC", 0)))[:4] if p.get("YRC") else "N/A"
+        
+        lines.append(f"**Year: {yr}**")
+        lines.append(f"  - **ROE:** {p.get('Return_ROE', 0):.2f}% "
+                     f"(PAT: {p.get('Return_ROE_NetProfit'):,.0f} / NW: {p.get('Return_ROE_Networth'):,.0f})")
+        lines.append(f"  - **ROCE:** {p.get('Return_ROCE', 0):.2f}% "
+                     f"(EBIT: {p.get('Return_ROCE_EBIT'):,.0f} / Cap. Emp: {p.get('Return_ROCE_CapitalEmployed'):,.0f})")
+        lines.append(f"  - **ROA:** {p.get('Return_ReturnOnAssets', 0):.2f}%")
+        lines.append("---")
+        
     return "\n".join(lines)
 
 
@@ -2631,31 +2365,67 @@ def get_return_ratios(co_code: int, report_type: str = "s") -> str:
     "REQUIRES co_code — call resolve_nse_symbol first. "
     "report_type: 's' = standalone (default), 'c' = consolidated."
 ))
-def get_all_basic_ratios(co_code: int, report_type: str = "s") -> str:
+def get_all_basic_ratios(co_code: int, report_type: str = "S") -> str:
     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
-    t = report_type if report_type in ("s", "c") else "s"
+    
+    # Enforce uppercase 'S' or 'C'
+    t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
+    
     url = EP["all_basic_ratios"].format(co_code=val, t=t)
     data, err = _get(url, f"AllBasicRatios[{val}]")
     if err:
         return err
+    
     rows = _rows(data)
     if not rows:
         return "No basic ratio data found."
+    
+    # Mapped to the specific keys found in the Reliance Industries (476) debug log
+    # Includes TTM, Yearly, and Quarterly variants
     FIELDS = [
-        "CO_CODE", "EPS", "EPS_Yearly", "PE", "PE_Yearly", "PBV",
-        "QuickRatio_Yearly", "DivYield_TTM", "BookValue",
-        "ROE", "ROE_Yearly", "ROCE", "ROCE_Yearly",
-        "EBITDA_Yearly", "EV", "EV_EBITDA", "NetIncomeMargin",
-        "PEGRatio", "Growth", "Qr",
+        "lname", "EPS_Qtr", "EPS_Yearly", "EPS_TTM", "PE_Yearly", "PE_TTM",
+        "DivYield_Yearly", "DivYield_TTM", "CurrentRatio_Yearly", 
+        "QuickRatio_Yearly", "DebtEquityRatio_Yearly", "EBITDA_Qtr", 
+        "EBITDA_Yearly", "Pat_Growth_Qtr", "NetSales_Growth_Qtr",
+        "Pat_Growth_Yearly", "NetSales_Growth_Yearly", "Pat_Growth_TTM", 
+        "NetSales_Growth_TTM"
     ]
+    
     r = rows[0]
     p = _pick(r, FIELDS)
-    lines = [f"All Basic Ratios — CO_CODE: {p.get('CO_CODE', val)}"]
-    for k, v in p.items():
-        if k != "CO_CODE":
-            lines.append(f"  {k:<25}: {v}")
+    
+    lines = [f"### All Basic Ratios: {p.get('lname', 'Unknown Company')} (Code: {val})"]
+    lines.append(f"**Reporting Type:** {'Standalone' if t == 'S' else 'Consolidated'}\n")
+
+    # Helper for clean formatting
+    def fmt(val, is_pct=False):
+        if isinstance(val, (int, float)):
+            return f"{val:,.2f}{'%' if is_pct else ''}"
+        return "N/A"
+
+    # Category: Valuation & Earnings
+    lines.append("#### 📊 Valuation & Earnings")
+    lines.append(f"  - **EPS:** TTM: {p.get('EPS_TTM')} | Yearly: {p.get('EPS_Yearly')} | Qtr: {p.get('EPS_Qtr')}")
+    lines.append(f"  - **P/E Ratio:** TTM: {fmt(p.get('PE_TTM'))}x | Yearly: {fmt(p.get('PE_Yearly'))}x")
+    lines.append(f"  - **Div Yield:** TTM: {fmt(p.get('DivYield_TTM'), True)} | Yearly: {fmt(p.get('DivYield_Yearly'), True)}")
+
+    # Category: Liquidity & Solvency
+    lines.append("\n#### 🛡️ Liquidity & Solvency")
+    lines.append(f"  - **Current Ratio:** {fmt(p.get('CurrentRatio_Yearly'))}x")
+    lines.append(f"  - **Quick Ratio:** {fmt(p.get('QuickRatio_Yearly'))}x")
+    lines.append(f"  - **Debt/Equity:** {fmt(p.get('DebtEquityRatio_Yearly'))}x")
+
+    # Category: Growth (Sales & PAT)
+    lines.append("\n#### 📈 Growth Performance")
+    lines.append(f"  - **Sales Growth:** TTM: {fmt(p.get('NetSales_Growth_TTM'), True)} | Yearly: {fmt(p.get('NetSales_Growth_Yearly'), True)} | Qtr: {fmt(p.get('NetSales_Growth_Qtr'), True)}")
+    lines.append(f"  - **PAT Growth:**   TTM: {fmt(p.get('Pat_Growth_TTM'), True)} | Yearly: {fmt(p.get('Pat_Growth_Yearly'), True)} | Qtr: {fmt(p.get('Pat_Growth_Qtr'), True)}")
+    
+    # Category: Operational
+    lines.append("\n#### ⚙️ Operational")
+    lines.append(f"  - **EBITDA:** Yearly: {fmt(p.get('EBITDA_Yearly'))} | Qtr: {fmt(p.get('EBITDA_Qtr'))}")
+
     return "\n".join(lines)
 
 
@@ -2673,32 +2443,54 @@ def get_all_basic_ratios(co_code: int, report_type: str = "s") -> str:
     "REQUIRES co_code — call resolve_nse_symbol first. "
     "report_type: 's' = standalone (default), 'c' = consolidated."
 ))
-def get_quarterly_ratios(co_code: int, report_type: str = "s") -> str:
+def get_quarterly_ratios(co_code: int, report_type: str = "S") -> str:
     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
-    t = report_type if report_type in ("s", "c") else "s"
+    
+    t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
     url = EP["quarterly_ratios"].format(co_code=val, t=t)
     data, err = _get(url, f"QuarterlyRatios[{val}]")
     if err:
         return err
+    
     rows = _rows(data)
     if not rows:
         return "No quarterly ratio data found."
-    FIELDS = [
-        "CO_CODE", "EV", "EPS", "PBV", "FBV", "BookValue", "EBT",
-        "EBITDA", "GrossIncomeMargin", "EBITDAMargin", "COGS",
-        "PE", "PEGRatio", "NetSales", "IndNetprofit",
-        "DividendPayout_TTM", "ROCE_TTM",
-    ]
-    r = rows[0]
-    p = _pick(r, FIELDS)
-    lines = [f"Quarterly Ratios — CO_CODE: {p.get('CO_CODE', val)}"]
-    for k, v in p.items():
-        if k != "CO_CODE":
-            lines.append(f"  {k:<25}: {v}")
-    return "\n".join(lines)
 
+    # Mapped to the actual lowercase keys in the live JSON response
+    FIELDS = [
+        "qtrend", "netsales", "ebitdamargin", "netincomemargin", 
+        "eps", "pe", "pbv", "netprofit", "ebitda"
+    ]
+    
+    lines = [f"### Quarterly Performance Trends ({'Standalone' if t == 'S' else 'Consolidated'})"]
+    lines.append(f"{'Quarter':<10} | {'Sales':>10} | {'EBITDA%':>9} | {'PAT%':>8} | {'EPS':>7} | {'P/E':>7}")
+    lines.append("-" * 75)
+
+    for row in rows[:5]:  # Show last 5 quarters for trend analysis
+        p = _pick(row, FIELDS)
+        
+        # Format qtrend (e.g., 202603 -> Mar-26)
+        q_raw = str(int(p.get("qtrend", 0)))
+        q_label = f"{q_raw[4:]}/{q_raw[2:4]}" if len(q_raw) == 6 else q_raw
+        
+        def f(k, suffix="", is_pct=False):
+            v = p.get(k)
+            if isinstance(v, (int, float)):
+                return f"{v:,.2f}{'%' if is_pct else suffix}"
+            return "N/A"
+
+        lines.append(
+            f"{q_label:<10} | "
+            f"{f('netsales'):>10} | "
+            f"{f('ebitdamargin', is_pct=True):>9} | "
+            f"{f('netincomemargin', is_pct=True):>8} | "
+            f"{f('eps'):>7} | "
+            f"{f('pe'):>7}"
+        )
+        
+    return "\n".join(lines)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # YEARLY RESULTS BASED RATIOS  ← NEW (was missing from original code)
@@ -2719,490 +2511,71 @@ def get_quarterly_ratios(co_code: int, report_type: str = "s") -> str:
     "REQUIRES co_code — call resolve_nse_symbol first. "
     "report_type: 's' = standalone (default), 'c' = consolidated."
 ))
-def get_yearly_ratios(co_code: int, report_type: str = "s") -> str:
+def get_yearly_ratios(co_code: int, report_type: str = "S") -> str:
     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
-    t = report_type if report_type in ("s", "c") else "s"
+    
+    # Standardize to uppercase 'S' or 'C'
+    t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
+    
     url = EP["yearly_ratios"].format(co_code=val, t=t)
     data, err = _get(url, f"YearlyRatios[{val}]")
     if err:
         return err
+    
     rows = _rows(data)
     if not rows:
         return "No yearly ratio data found."
+
+    # Mapped to the specific lowercase/mixed keys from the live API response
     FIELDS = [
-        "CO_CODE", "EV", "PE", "PBV", "DivYield_LO", "DivField_TTM",
-        "EPS", "BookValue", "ROE", "ROA", "ROCE", "ROIC",
-        "EBITDA", "NetIncomeMargin", "GrossIncomeMargin", "EBITDAMargin",
-        "AssetTurnover", "FCF_Margin", "NetDebt_FCF", "CurrentRatio",
-        "NetDebt", "LongTermDebt", "TotalShareHolderEq", "ShortternDebt",
-        "EBITDA_Yearly", "TotalAssets", "NetSales", "AnnualDividend",
-        "IndNetprofit", "TotalShareHolderEarnings", "SectorPE",
+        "yearend", "netsales", "netprofit", "eps", "pe", "SectorPE", 
+        "pbv", "roe", "roce", "roa", "ebitda_margin", "netincomemargin",
+        "debt_equity", "netdebt_ebitda", "fcf_margin", "currentratio",
+        "totalshareholdersequity", "longtermdebt", "annualdividend"
     ]
-    r = rows[0]
-    p = _pick(r, FIELDS)
-    lines = [f"Yearly Ratios — CO_CODE: {p.get('CO_CODE', val)}"]
-    for k, v in p.items():
-        if k != "CO_CODE":
-            lines.append(f"  {k:<30}: {v}")
-    return "\n".join(lines)
+    
+    lines = [f"### Yearly Financial Summary ({'Standalone' if t == 'S' else 'Consolidated'})"]
+    lines.append(f"{'Year':<10} | {'Sales':>10} | {'ROE%':>7} | {'P/E':>7} | {'Sec. PE':>7} | {'D/E':>6}")
+    lines.append("-" * 65)
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# RATIOS RETURN (historical return ratios via separate endpoint)  ← NEW
-# Fields (Yearly / C): Return_ROE, Return_ROE_NetProfit, Return_ROE_NetworkW,
-#                      Return_ROCE_EBIT, Return_ROCE_Capital,
-#                      Return_ROA, Return_ROA_NetProfit
-# ──────────────────────────────────────────────────────────────────────────────
-@mcp.tool(description=(
-    "Get detailed return ratio decomposition across years: Return_ROE, "
-    "Return_ROE_NetProfit, Return_ROE_NetworkW, Return_ROCE_EBIT, "
-    "Return_ROCE_Capital, Return_ROA, Return_ROA_NetProfit. "
-    "REQUIRES co_code — call resolve_nse_symbol first. "
-    "report_type: 's' = standalone (default), 'c' = consolidated."
-))
-def get_ratios_return(co_code: int, report_type: str = "s") -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
-    t = report_type if report_type in ("s", "c") else "s"
-    url = EP["ratios_return"].format(co_code=val, t=t)
-    data, err = _get(url, f"RatiosReturn[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No return ratio decomposition data found."
-    FIELDS = ["Year", "YRC",
-              "Return_ROE", "Return_ROE_NetProfit", "Return_ROE_NetworkW",
-              "Return_ROCE_EBIT", "Return_ROCE_Capital",
-              "Return_ROA", "Return_ROA_NetProfit"]
-    lines = [f"Return Ratio Decomposition [{'Standalone' if t == 's' else 'Consolidated'}]:"]
     for row in rows[:5]:
         p = _pick(row, FIELDS)
-        yr = p.get("Year") or p.get("YRC", "N/A")
+        
+        # Format Year (202503.0 -> 2025)
+        yr_raw = str(int(p.get("yearend", 0)))
+        yr = yr_raw[:4] if len(yr_raw) >= 4 else "N/A"
+        
+        def f(k, suffix="", is_pct=False, comma=False):
+            v = p.get(k)
+            if isinstance(v, (int, float)):
+                fmt_str = f"{v:,.2f}" if comma else f"{v:.2f}"
+                return f"{fmt_str}{'%' if is_pct else suffix}"
+            return "N/A"
+
+        # Table Row
         lines.append(
-            f"  {yr}  |  ROE: {p.get('Return_ROE', 'N/A')}%"
-            f"  ROE/NP: {p.get('Return_ROE_NetProfit', 'N/A')}"
-            f"  ROCE/EBIT: {p.get('Return_ROCE_EBIT', 'N/A')}"
-            f"  ROA: {p.get('Return_ROA', 'N/A')}%"
+            f"{yr:<10} | "
+            f"{f('netsales', comma=True):>10} | "
+            f"{f('roe', is_pct=True):>7} | "
+            f"{f('pe'):>7} | "
+            f"{f('SectorPE'):>7} | "
+            f"{f('debt_equity'):>6}"
         )
+        
+        # Add detailed margins and debt info for the most recent year only
+        if row == rows[0]:
+            lines.append(f"\n**Detailed Metrics (FY{yr}):**")
+            lines.append(f"  - **Margins:** EBITDA: {f('ebitda_margin', is_pct=True)} | Net: {f('netincomemargin', is_pct=True)}")
+            lines.append(f"  - **Liquidity:** Current Ratio: {f('currentratio')}x | FCF Margin: {f('fcf_margin', is_pct=True)}")
+            lines.append(f"  - **Solvency:** Net Debt/EBITDA: {f('netdebt_ebitda')}x | Net Worth: {f('totalshareholdersequity', comma=True)}")
+            lines.append(f"  - **Returns:** ROCE: {f('roce', is_pct=True)} | ROA: {f('roa', is_pct=True)}")
+            lines.append("-" * 65)
+
     return "\n".join(lines)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# RATIOS RETURN — CASH FLOW  ← NEW endpoint
-# Fields (Yearly / C): Return_ROE, Return_ROE_NetProfit, Return_ROE_NetworkW,
-#                      Return_RO_Assets_No, Return_RO_Assets_Ne,
-#                      Return_ROCE_EBIT, Return_ROCE_Capital,
-#                      Return_NetWorth_Advan, Return_TotalAssets_Advan,
-#                      Return_ROA_NetProfit, Return_TotalOA_Advan
-# ──────────────────────────────────────────────────────────────────────────────
-@mcp.tool(description=(
-    "Get cash-flow-based return ratios: Return_ROE, Return_ROE_NetProfit, "
-    "Return_ROE_NetworkW, Return_RO_Assets_No, Return_RO_Assets_Ne, "
-    "Return_ROCE_EBIT, Return_ROCE_Capital, Return_NetWorth_Advan, "
-    "Return_TotalAssets_Advan, Return_ROA_NetProfit, Return_TotalOA_Advan. "
-    "REQUIRES co_code — call resolve_nse_symbol first. "
-    "report_type: 's' = standalone (default), 'c' = consolidated."
-))
-def get_ratios_return_cashflow(co_code: int, report_type: str = "s") -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
-    t = report_type if report_type in ("s", "c") else "s"
-    url = EP["ratios_return_cashflow"].format(co_code=val, t=t)
-    data, err = _get(url, f"RatiosReturnCF[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No cash-flow return ratio data found."
-    FIELDS = ["Year", "YRC",
-              "Return_ROE", "Return_ROE_NetProfit", "Return_ROE_NetworkW",
-              "Return_RO_Assets_No", "Return_RO_Assets_Ne",
-              "Return_ROCE_EBIT", "Return_ROCE_Capital",
-              "Return_NetWorth_Advan", "Return_TotalAssets_Advan",
-              "Return_ROA_NetProfit", "Return_TotalOA_Advan"]
-    lines = [f"Cash Flow Return Ratios [{'Standalone' if t == 's' else 'Consolidated'}]:"]
-    for row in rows[:5]:
-        p = _pick(row, FIELDS)
-        yr = p.get("Year") or p.get("YRC", "N/A")
-        lines.append(
-            f"  {yr}  |  ROE: {p.get('Return_ROE', 'N/A')}%"
-            f"  RO_Assets: {p.get('Return_RO_Assets_No', 'N/A')}"
-            f"  ROCE/EBIT: {p.get('Return_ROCE_EBIT', 'N/A')}"
-            f"  NW_Advan: {p.get('Return_NetWorth_Advan', 'N/A')}"
-        )
-    return "\n".join(lines)
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# RATIOS SOLVENCY (historical)  ← NEW separate endpoint distinct from solvency
-# Fields (Yearly / C): solvency_totaldebtton, solvency_interestcov,
-#                      solvency_interestcovr, solvency_currentratio,
-#                      solvency_currentratioc, solvency_currrentator,
-#                      solvency_currentratioo, solvency_currrentator (alias)
-# ──────────────────────────────────────────────────────────────────────────────
-@mcp.tool(description=(
-    "Get detailed solvency ratios from the RatiosSolvency endpoint: "
-    "solvency_totaldebtton, solvency_interestcov, solvency_interestcovr, "
-    "solvency_currentratio, solvency_currentratioc, solvency_currrentator, "
-    "solvency_currentratioo, solvency_currrentator. "
-    "REQUIRES co_code — call resolve_nse_symbol first. "
-    "report_type: 's' = standalone (default), 'c' = consolidated."
-))
-def get_ratios_solvency(co_code: int, report_type: str = "s") -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
-    t = report_type if report_type in ("s", "c") else "s"
-    url = EP["ratios_solvency"].format(co_code=val, t=t)
-    data, err = _get(url, f"RatiosSolvency[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No solvency ratio data found."
-    FIELDS = ["Year", "YRC",
-              "solvency_totaldebtton", "solvency_interestcov", "solvency_interestcovr",
-              "solvency_currentratio", "solvency_currentratioc",
-              "solvency_currrentator", "solvency_currentratioo"]
-    lines = [f"Solvency Ratios (Detailed) [{'Standalone' if t == 's' else 'Consolidated'}]:"]
-    for row in rows[:5]:
-        p = _pick(row, FIELDS)
-        yr = p.get("Year") or p.get("YRC", "N/A")
-        lines.append(
-            f"  {yr}  |  TotalDebt/Net: {p.get('solvency_totaldebtton', 'N/A')}"
-            f"  Int Cov: {p.get('solvency_interestcov', 'N/A')}"
-            f"  Current: {p.get('solvency_currentratio', 'N/A')}x"
-        )
-    return "\n".join(lines)
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# ALL BASIC RATIOS — TTM/Daily  ← uses Allbasicratio endpoint
-# Fields: CO_CODE, EPS, EPS_Yearly, PE, PE_Yearly, PBV,
-#         QuickRatio_Yearly, Div_TTM, Div_Yearly, BookValue,
-#         ROE, ROE_Yearly, ROCE, ROCE_Yearly, EBITDA_Yearly,
-#         EV, EV_EBITDA, NetIncomeMargin, PEGRatio, Growth_Qr,
-#         Growth_Yearly, Pat_Growth_TTM, NetSales_Growth_TTM,
-#         Pat_Growth_TTM (alias), Growth_TTM
-# ──────────────────────────────────────────────────────────────────────────────
-# NOTE: get_all_basic_ratios above already covers this endpoint.
-#       The tool is registered once above with the full field list.
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# GROWTH RATIOS — MARGIN (separate endpoint from GrowthRatio)  ← NEW
-# Fields (Yearly / C): NetSales_Growth, Pat_Growth, Growth_TTM,
-#                      NetSales_Growth_TTM  (TTM versions also available)
-# ──────────────────────────────────────────────────────────────────────────────
-@mcp.tool(description=(
-    "Get margin-linked growth ratios: NetSales_Growth, Pat_Growth, Growth_TTM, "
-    "NetSales_Growth_TTM (trailing twelve months versions). "
-    "REQUIRES co_code — call resolve_nse_symbol first. "
-    "report_type: 's' = standalone (default), 'c' = consolidated."
-))
-def get_growth_ratios_margin(co_code: int, report_type: str = "s") -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
-    t = report_type if report_type in ("s", "c") else "s"
-    url = EP["growth_ratio_margin"].format(co_code=val, t=t)
-    data, err = _get(url, f"GrowthRatioMargin[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No growth margin ratio data found."
-    FIELDS = ["Year", "YRC",
-              "NetSales_Growth", "Pat_Growth",
-              "Growth_TTM", "NetSales_Growth_TTM"]
-    lines = [f"Growth Ratios (Margin) [{'Standalone' if t == 's' else 'Consolidated'}]:"]
-    for row in rows[:5]:
-        p = _pick(row, FIELDS)
-        yr = p.get("Year") or p.get("YRC", "N/A")
-        lines.append(
-            f"  {yr}  |  Sales Growth: {p.get('NetSales_Growth', 'N/A')}%"
-            f"  PAT Growth: {p.get('Pat_Growth', 'N/A')}%"
-            f"  Growth TTM: {p.get('Growth_TTM', 'N/A')}%"
-            f"  Sales TTM: {p.get('NetSales_Growth_TTM', 'N/A')}%"
-        )
-    return "\n".join(lines)
-
-
-# @mcp.tool(description=(
-#     "Get historical financial stability and solvency ratios across years: "
-#     "Total Debt/Equity, Current Ratio, Quick Ratio, Interest Coverage, and Debt/Market Cap. "
-#     "REQUIRES co_code — call resolve_nse_symbol first. "
-#     "report_type: 's' = standalone (default), 'c' = consolidated."
-# ))
-# def get_financial_stability_ratios(co_code: int, report_type: str = "s") -> str:
-#     # 1. Validate input and normalize report type
-#     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-#     if err:
-#         return err
-    
-#     t = report_type.lower() if report_type in ("s", "c") else "s"
-    
-#     # 2. Fetch data from the CMOTS API endpoint
-#     url = EP["financial_stability_ratios"].format(co_code=val, t=t)
-#     data, err = _get(url, f"FinancialStability[{val}]")
-#     if err:
-#         return err
-    
-#     rows = _rows(data)
-#     if not rows:
-#         return "No financial stability ratio data found."
-
-#     # 3. Define fields based on your provided schema image
-#     FIELDS = [
-#         "YRC", 
-#         "TotalDebt_Equity", 
-#         "CurrentRatio", 
-#         "QuickRatio", 
-#         "InterestCover", 
-#         "TotalDebt_MCap"
-#     ]
-    
-#     lines = [f"### Financial Stability Ratios ({'Standalone' if t == 's' else 'Consolidated'})"]
-#     lines.append(f"{'Year':<6} | {'D/E':>8} | {'Curr.':>8} | {'Quick':>8} | {'Int.Cov':>8} | {'D/MCap':>8}")
-#     lines.append("-" * 65)
-
-#     # 4. Iterate through rows (limiting to top 5 for concise context)
-#     for row in rows[:5]:
-#         p = _pick(row, FIELDS)
-        
-#         # Mapping fields with 'x' (times) unit as specified in your schema
-#         yr = p.get("YRC", "N/A")
-#         de = p.get("TotalDebt_Equity", "0.00")
-#         cr = p.get("CurrentRatio", "0.00")
-#         qr = p.get("QuickRatio", "0.00")
-#         ic = p.get("InterestCover", "0.00")
-#         dm = p.get("TotalDebt_MCap", "0.00")
-
-#         lines.append(
-#             f"{str(yr):<6} | {de:>7}x | {cr:>7}x | {qr:>7}x | {ic:>7}x | {dm:>7}x"
-#         )
-        
-#     return "\n".join(lines)
-
-# @mcp.tool(description=(
-#     "Get historical performance ratios across years: Return on Assets (ROA) and Return on Equity (ROE). "
-#     "Values are returned as percentages. "
-#     "REQUIRES co_code — call resolve_nse_symbol first. "
-#     "report_type: 's' = standalone (default), 'c' = consolidated."
-# ))
-# def get_performance_ratios(co_code: int, report_type: str = "s") -> str:
-#     # 1. Input validation
-#     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-#     if err:
-#         return err
-    
-#     t = report_type.lower() if report_type in ("s", "c") else "s"
-    
-#     # 2. API Request using the specific PerformanceRatios endpoint
-#     url = EP["performance_ratios"].format(co_code=val, t=t)
-#     data, err = _get(url, f"PerformanceRatios[{val}]")
-#     if err:
-#         return err
-    
-#     rows = _rows(data)
-#     if not rows:
-#         return "No performance ratio data found."
-
-#     # 3. Mapping fields according to the schema: YRC, ROA, ROE
-#     FIELDS = ["YRC", "ROA", "ROE"]
-    
-#     lines = [f"### Performance Ratios ({'Standalone' if t == 's' else 'Consolidated'})"]
-#     lines.append(f"{'Year':<8} | {'ROA (%)':>10} | {'ROE (%)':>10}")
-#     lines.append("-" * 35)
-
-#     # 4. Displaying the historical trend
-#     for row in rows[:5]:
-#         p = _pick(row, FIELDS)
-        
-#         yr = p.get("YRC", "N/A")
-#         # Ensure values are treated as floats for consistent formatting
-#         try:
-#             roa = f"{float(p.get('ROA', 0)):>9.2f}%"
-#         except:
-#             roa = f"{str(p.get('ROA', '0.00')):>9}%"
-            
-#         try:
-#             roe = f"{float(p.get('ROE', 0)):>9.2f}%"
-#         except:
-#             roe = f"{str(p.get('ROE', '0.00')):>9}%"
-
-#         lines.append(f"{str(yr):<8} | {roa} | {roe}")
-        
-#     return "\n".join(lines)
-
-# @mcp.tool(description=(
-#     "Get ratios derived from the latest quarterly results: MCAP, PE, PBV, EPS, "
-#     "EBITDA Margin, Net Sales, and Net Profit. "
-#     "REQUIRES co_code. report_type: 's' (standalone) or 'c' (consolidated)."
-# ))
-# def get_quarterly_ratios(co_code: int, report_type: str = "s") -> str:
-#     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-#     if err: return err
-    
-#     t = report_type.lower() if report_type in ("s", "c") else "s"
-#     url = EP["quarterly_ratios"].format(co_code=val, t=t)
-#     data, err = _get(url, f"QuarterlyRatios[{val}]")
-#     if err: return err
-    
-#     rows = _rows(data)
-#     if not rows: return "No quarterly ratio data found."
-
-#     r = rows[0]
-#     # Fields mapped directly from your provided schema
-#     FIELDS = [
-#         "QtrEnd", "MCAP", "EV", "PE", "PBV", "EPS", "BookValue", 
-#         "EBIT", "EBITDA", "EV_Sales", "EV_EBITDA", "NetIncomeMargin", 
-#         "GrossIncomeMargin", "EBITDAMargin", "EPSDiluted", 
-#         "NetSales", "Netprofit", "COGS"
-#     ]
-#     p = _pick(r, FIELDS)
-    
-#     lines = [f"### Quarterly Ratios — {'Standalone' if t == 's' else 'Consolidated'} (End: {p.get('QtrEnd', 'N/A')})"]
-#     lines.append("-" * 60)
-
-#     # Unit Mapping
-#     cr_fields = ["MCAP", "EV", "EBIT", "EBITDA", "NetSales", "Netprofit", "COGS"]
-#     pct_fields = ["NetIncomeMargin", "GrossIncomeMargin", "EBITDAMargin"]
-#     mult_fields = ["PE", "PBV", "EV_Sales", "EV_EBITDA"]
-
-#     for k in FIELDS:
-#         if k == "QtrEnd": continue
-#         v = p.get(k, "N/A")
-#         unit = "Cr" if k in cr_fields else "%" if k in pct_fields else "x" if k in mult_fields else ""
-#         lines.append(f"  {k:<20}: {v} {unit}".strip())
-
-#     return "\n".join(lines)
-
-# @mcp.tool(description=(
-#     "Get exhaustive yearly ratios: Debt/Equity, ROE, ROCE, FCF Margin, "
-#     "Asset Turnover, Sector PE, and Retained Earnings. "
-#     "REQUIRES co_code. report_type: 's' (standalone) or 'c' (consolidated)."
-# ))
-# def get_yearly_ratios(co_code: int, report_type: str = "s") -> str:
-#     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-#     if err: return err
-    
-#     t = report_type.lower() if report_type in ("s", "c") else "s"
-#     url = EP["yearly_ratios"].format(co_code=val, t=t)
-#     data, err = _get(url, f"YearlyRatios[{val}]")
-#     if err: return err
-    
-#     rows = _rows(data)
-#     if not rows: return "No yearly ratio data found."
-
-#     r = rows[0]
-#     # Complete mapping from the 2nd schema in your image
-#     FIELDS = [
-#         "YearEnd", "MCAP", "EV", "PE", "PBV", "DIVYIELD", "DividendPayout", 
-#         "EPS", "BookValue", "ROA", "ROE", "ROCE", "EBIT", "EBITDA", 
-#         "EV_Sales", "EV_EBITDA", "NetIncomeMargin", "GrossIncomeMargin", 
-#         "AssetTurnover", "CurrentRatio", "Debt_Equity", "FCF_Margin", 
-#         "Sales_TotalAsset", "NetDebt_FCF", "NetDebt_EBITDA", "EBITDA_Margin", 
-#         "TotalShareholdersEqu", "ShorttermDebt", "LongtermDebt", 
-#         "SharesOutstanding", "NetSales", "Netprofit", "AnnualDividend", 
-#         "COGS", "RetainedEarnings", "SectorPE"
-#     ]
-#     p = _pick(r, FIELDS)
-    
-#     lines = [f"### Yearly Comprehensive Ratios (FY End: {p.get('YearEnd', 'N/A')})"]
-#     lines.append("-" * 65)
-
-#     # Categorized output for LLM reasoning
-#     groups = {
-#         "Valuation": ["MCAP", "EV", "PE", "SectorPE", "PBV", "EV_Sales", "EV_EBITDA"],
-#         "Profitability": ["ROE", "ROCE", "ROA", "EBITDA_Margin", "NetIncomeMargin", "FCF_Margin"],
-#         "Solvency & Liquidity": ["Debt_Equity", "NetDebt_EBITDA", "NetDebt_FCF", "CurrentRatio", "LongtermDebt"],
-#         "Operations": ["NetSales", "Netprofit", "COGS", "AssetTurnover", "Sales_TotalAsset", "RetainedEarnings"],
-#         "Shareholder Info": ["EPS", "DIVYIELD", "AnnualDividend", "DividendPayout", "SharesOutstanding"]
-#     }
-
-#     for group, keys in groups.items():
-#         lines.append(f"\n[{group}]")
-#         for k in keys:
-#             v = p.get(k, "N/A")
-#             # Dynamic unit assignment
-#             unit = "%" if "Margin" in k or "ROE" in k or "ROA" in k or "ROCE" in k or "YIELD" in k else \
-#                    "x" if k in ["PE", "SectorPE", "PBV", "CurrentRatio", "Debt_Equity"] else \
-#                    "Cr" if k in ["NetSales", "Netprofit", "MCAP", "EV", "EBITDA", "RetainedEarnings"] else ""
-#             lines.append(f"  {k:<22}: {v} {unit}".strip())
-
-#     return "\n".join(lines)
-
-# @mcp.tool(description=(
-#     "Get comprehensive yearly results-based ratios: MCAP, PE, PBV, DivYield, EPS, "
-#     "ROE/ROCE, Debt_Equity, Margins, and Balance Sheet snippets. "
-#     "REQUIRES co_code — call resolve_nse_symbol first. "
-#     "report_type: 's' = standalone (default), 'c' = consolidated."
-# ))
-# def get_yearly_result_based_ratios(co_code: int, report_type: str = "s") -> str:
-#     # 1. Validation and Setup
-#     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-#     if err:
-#         return err
-    
-#     t = report_type.lower() if report_type in ("s", "c") else "s"
-    
-#     # 2. API Request
-#     url = EP["yearly_result_based_ratios"].format(co_code=val, t=t)
-#     data, err = _get(url, f"YearlyResults[{val}]")
-#     if err:
-#         return err
-    
-#     rows = _rows(data)
-#     if not rows:
-#         return "No yearly results data found."
-
-#     # 3. Comprehensive field mapping from your schema image
-#     FIELDS = [
-#         "YearEnd", "MCAP", "EV", "PE", "PBV", "DIVYIELD", "DividendPayout",
-#         "EPS", "BookValue", "ROA", "ROE", "ROCE", "EBIT", "EBITDA",
-#         "EV_Sales", "EV_EBITDA", "NetIncomeMargin", "GrossIncomeMargin",
-#         "AssetTurnover", "CurrentRatio", "Debt_Equity", "NetDebt_EBITDA",
-#         "EBITDA_Margin", "TotalShareholdersEqu", "ShorttermDebt",
-#         "LongTermDebt", "EPSDiluted", "NetSales", "Netprofit",
-#         "AnnualDividend", "COGS"
-#     ]
-    
-#     r = rows[0]
-#     p = _pick(r, FIELDS)
-    
-#     label = "Standalone" if t == "s" else "Consolidated"
-#     lines = [f"### Yearly Results & Ratios — {label} (FY: {p.get('YearEnd', 'N/A')})"]
-#     lines.append("-" * 65)
-
-#     # 4. Categorized formatting for clear AI interpretation
-#     groups = {
-#         "Market Valuation": ["MCAP", "EV", "PE", "PBV", "EV_Sales", "EV_EBITDA"],
-#         "Returns & Margins": ["ROE", "ROCE", "ROA", "NetIncomeMargin", "GrossIncomeMargin", "EBITDA_Margin"],
-#         "Financial Health": ["Debt_Equity", "NetDebt_EBITDA", "CurrentRatio", "AssetTurnover"],
-#         "Per Share & Dividends": ["EPS", "EPSDiluted", "BookValue", "DIVYIELD", "AnnualDividend", "DividendPayout"],
-#         "P&L Snippet": ["NetSales", "EBITDA", "EBIT", "Netprofit", "COGS"],
-#         "Capital Structure": ["TotalShareholdersEqu", "ShorttermDebt", "LongTermDebt"]
-#     }
-
-#     # Unit Assignment
-#     cr_units = ["MCAP", "EV", "NetSales", "Netprofit", "EBITDA", "EBIT", "TotalShareholdersEqu", "COGS"]
-#     pct_units = ["ROE", "ROCE", "ROA", "DIVYIELD", "NetIncomeMargin", "GrossIncomeMargin", "EBITDA_Margin"]
-#     mult_units = ["PE", "PBV", "EV_Sales", "EV_EBITDA", "Debt_Equity", "CurrentRatio"]
-
-#     for group_name, keys in groups.items():
-#         lines.append(f"\n**{group_name}**")
-#         for k in keys:
-#             v = p.get(k, "N/A")
-#             unit = " Cr" if k in cr_units else "%" if k in pct_units else "x" if k in mult_units else ""
-#             lines.append(f"  {k:<22}: {v}{unit}")
-
-#     return "\n".join(lines)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SECTION 4 — STOCK FINANCIAL STATEMENTS
@@ -3211,21 +2584,23 @@ def get_growth_ratios_margin(co_code: int, report_type: str = "s") -> str:
 @mcp.tool(description=(
     "Fetches quarterly P&L results from equifizapis.cmots.com. "
     "Handles pivoted data where COLUMNNAME is the metric and Y-prefixed keys are quarters."
+    "REQUIRES co_code — call resolve_nse_symbol first. "
+    "report_type: 's' = standalone (default), 'c' = consolidated."
 ))
 def get_quarterly_results(co_code: int, report_type: str = "S") -> str:
     """
+    Fetches and formats quarterly financial results.
     Args:
-        co_code: CMOTS Company Code (e.g., 476).
+        co_code: CMOTS Company Code.
         report_type: 'S' for Standalone, 'C' for Consolidated.
     """
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
+    val, err = _require_int(co_code, "co_code", "get_quarterly_results")
     if err:
         return err
     
     t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
     url = EP["quarterly_results"].format(co_code=val, t=t)
     
-    # Using the token/headers established in your environment
     response_data, err = _get(url, f"QuarterlyResults[{val}]")
     
     if err or not response_data.get("success"):
@@ -3235,32 +2610,36 @@ def get_quarterly_results(co_code: int, report_type: str = "S") -> str:
     if not data:
         return "No quarterly data rows found."
 
-    # 1. Identify Period Columns (e.g., Y202603, Y202512) from the first metric row
+    # 1. Identify Period Columns dynamically from the first row
+    # Sorted reverse to get the latest dates first
     periods = sorted(
         [k for k in data[0].keys() if k.startswith("Y") and k[1:].isdigit()],
         reverse=True
-    )[:6] # Take the most recent 6 quarters
+    )[:5] # Showing 5 quarters is usually the sweet spot for comparison
 
-    # 2. Extract specific P&L metrics by matching COLUMNNAME
-    # We use partial matches because names often have leading spaces or sub-labels
+    # 2. Extract specific metrics with strict matching
     report = {p: {} for p in periods}
-    metric_map = {
-        "NET SALES/INCOME FROM OPERATIONS": "Net Sales",
-        "TOTAL EXPENSES": "Total Expenses",
-        "PROFIT FROM ORDINARY ACTIVITIES BEFORE TAX": "PBT",
-        "NET PROFIT AFTER TAX FOR THE PERIOD": "PAT",
-        "BASIC": "EPS" # Matches 'EPS after Exceptional items-Basic'
-    }
-
+    
     for row in data:
         raw_name = str(row.get("COLUMNNAME", "")).strip().upper()
-        for key, label in metric_map.items():
-            if key in raw_name:
-                for p in periods:
-                    report[p][label] = row.get(p, 0.0)
+        
+        # Mapping logic based on your specific JSON response keys
+        target_label = None
+        if raw_name == "NET SALES/INCOME FROM OPERATIONS":
+            target_label = "Net Sales"
+        elif raw_name == "TOTAL EXPENSES":
+            target_label = "Total Exp"
+        elif raw_name == "NET PROFIT AFTER TAX FOR THE PERIOD":
+            target_label = "PAT"
+        elif "EPS AFTER" in raw_name and "BASIC" in raw_name:
+            target_label = "EPS"
 
-    # 3. Format the Output
-    lines = [f"### Quarterly Results (Code: {val} | {t})", "---"]
+        if target_label:
+            for p in periods:
+                report[p][target_label] = row.get(p, 0.0)
+
+    # 3. Build the Markdown Response
+    lines = [f"## Quarterly Results: {t == 'S' and 'Standalone' or 'Consolidated'}", "---"]
     
     for p in periods:
         # Format Y202603 -> Mar 2026
@@ -3268,11 +2647,19 @@ def get_quarterly_results(co_code: int, report_type: str = "S") -> str:
         mo_label = {"03": "Mar", "06": "Jun", "09": "Sep", "12": "Dec"}.get(mo, mo)
         
         m = report[p]
+        sales = m.get('Net Sales', 0)
+        pat = m.get('PAT', 0)
+        eps = m.get('EPS', 0)
+        
+        # Calculate Margin
+        margin = (pat / sales * 100) if sales > 0 else 0
+        
         lines.append(
-            f"**{mo_label} {yr}**\n"
-            f"* **Net Sales:** ₹{m.get('Net Sales', 0):,.2f} Cr\n"
-            f"* **Total Exp:** ₹{m.get('Total Expenses', 0):,.2f} Cr\n"
-            f"* **PAT:** ₹{m.get('PAT', 0):,.2f} Cr | **EPS:** {m.get('EPS', 0):.2f}\n"
+            f"### {mo_label} {yr}\n"
+            f"*   **Net Sales:** ₹{sales:,.2f} Cr\n"
+            f"*   **Total Exp:** ₹{m.get('Total Exp', 0):,.2f} Cr\n"
+            f"*   **PAT:** ₹{pat:,.2f} Cr (Margin: **{margin:.2f}%**)\n"
+            f"*   **EPS:** {eps:.2f}"
         )
 
     return "\n".join(lines)
@@ -3284,65 +2671,61 @@ def get_quarterly_results(co_code: int, report_type: str = "S") -> str:
 ))
 def get_profit_loss(co_code: int, report_type: str = "S") -> str:
     """
-    Args:
-        co_code: CMOTS Company Code.
-        report_type: 'S' for Standalone, 'C' for Consolidated.
+    Fetches and formats multi-year annual financial performance.
     """
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    val, err = _require_int(co_code, "co_code", "get_profit_loss")
+    if err: return err
     
     t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
     url = EP["profit_loss"].format(co_code=val, t=t)
-    # Standard helper to get data
-    response_data, err = _get(url, f"P&L[{val}]")
     
+    response_data, err = _get(url, f"P&L[{val}]")
     if err or not response_data.get("success"):
         return f"Error fetching P&L data for code {val}."
 
     data = response_data.get("data", [])
-    if not data:
-        return "No annual P&L data found."
+    if not data: return "No annual data found."
 
-    # 1. Detect Year Columns (e.g., Y202503, Y202403) from the first row
+    # Filter for March year-ends (03) to ensure full fiscal year comparison
     periods = sorted(
-        [k for k in data[0].keys() if k.startswith("Y") and k[1:].isdigit()],
+        [k for k in data[0].keys() if k.startswith("Y") and k.endswith("03")],
         reverse=True
-    )
+    )[:5]
 
-    # 2. Map Metric Names to their Display Labels
-    # Based on your trace: 'Revenue From Operations - Net', 'Operation Profit before Depreciation', etc.
     report = {p: {} for p in periods}
-    metric_map = {
-        "REVENUE FROM OPERATIONS - NET": "Net Sales",
-        "OPERATION PROFIT BEFORE DEPRECIATION": "EBITDA",
-        "PROFIT AFTER TAX": "PAT",
-        "EARNING PER SHARE - BASIC": "EPS"
-    }
-
     for row in data:
-        raw_name = str(row.get("COLUMNNAME", "")).strip().upper()
-        for key, label in metric_map.items():
-            if key == raw_name: # Exact match for clarity
-                for p in periods:
-                    report[p][label] = row.get(p, 0.0)
+        name = str(row.get("COLUMNNAME", "")).strip().upper()
+        
+        if name == "REVENUE FROM OPERATIONS - NET":
+            label = "Sales"
+        elif name == "OPERATION PROFIT BEFORE DEPRECIATION":
+            label = "EBITDA"
+        elif name == "PROFIT AFTER TAX":
+            label = "PAT"
+        elif name == "EARNING PER SHARE - BASIC":
+            label = "EPS"
+        else:
+            continue
 
-    # 3. Format the response
-    lines = [f"### Annual Profit & Loss [{'Standalone' if t=='S' else 'Consolidated'}]", "---"]
-    
+        for p in periods:
+            report[p][label] = row.get(p, 0.0)
+
+    # Output Formatting
+    lines = [f"## Annual Profit & Loss ({'Standalone' if t=='S' else 'Consolidated'})", "---"]
     for p in periods:
-        # Format Y202503 -> FY 2025
-        year_label = f"FY {p[1:5]}"
         m = report[p]
+        sales, ebitda = m.get('Sales', 0), m.get('EBITDA', 0)
+        margin = (ebitda / sales * 100) if sales > 0 else 0
         
         lines.append(
-            f"**{year_label}**\n"
-            f"* **Net Sales:** ₹{m.get('Net Sales', 0):,.2f} Cr\n"
-            f"* **EBITDA:** ₹{m.get('EBITDA', 0):,.2f} Cr\n"
-            f"* **PAT:** ₹{m.get('PAT', 0):,.2f} Cr | **EPS:** {m.get('EPS', 0):.2f}\n"
+            f"### FY {p[1:5]}\n"
+            f"* **Net Sales:** ₹{sales:,.2f} Cr\n"
+            f"* **EBITDA:** ₹{ebitda:,.2f} Cr (Margin: **{margin:.2f}%**)\n"
+            f"* **PAT:** ₹{m.get('PAT', 0):,.2f} Cr | **EPS:** {m.get('EPS', 0):.2f}"
         )
 
     return "\n".join(lines)
+
 
 
 @mcp.tool(description=(
@@ -3351,68 +2734,78 @@ def get_profit_loss(co_code: int, report_type: str = "S") -> str:
 ))
 def get_balance_sheet(co_code: int, report_type: str = "S") -> str:
     """
+    Fetches and formats the annual Balance Sheet.
     Args:
         co_code: CMOTS Company Code.
         report_type: 'S' for Standalone, 'C' for Consolidated.
     """
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    val, err = _require_int(co_code, "co_code", "get_balance_sheet")
+    if err: return err
     
     t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
     url = EP["balance_sheet"].format(co_code=val, t=t)
     
     response_data, err = _get(url, f"BalanceSheet[{val}]")
-    
     if err or not response_data.get("success"):
-        return f"Error fetching Balance Sheet data for code {val}."
+        return f"Error fetching Balance Sheet for code {val}."
 
     data = response_data.get("data", [])
-    if not data:
-        return "No balance sheet data found."
+    if not data: return "No balance sheet data found."
 
-    # 1. Detect Year Columns (e.g., Y202503, Y202403)
+    # 1. Identify Fiscal Year (March) Columns
     periods = sorted(
-        [k for k in data[0].keys() if k.startswith("Y") and k[1:].isdigit()],
+        [k for k in data[0].keys() if k.startswith("Y") and k.endswith("03")],
         reverse=True
-    )
+    )[:5]
 
-    # 2. Map Metric Names to Display Labels based on the JSON trace
+    # 2. Extract specific metrics using strict matching to avoid double-counting
     report = {p: {} for p in periods}
-    metric_map = {
-        "TOTAL ASSETS": "Assets",
-        "TOTAL SHAREHOLDER'S FUND": "Equity",
-        "LONG TERM BORROWINGS": "LT Debt",
-        "SHORT TERM BORROWINGS": "ST Debt",
-        "CASH AND CASH EQUIVALENTS": "Cash"
-    }
-
     for row in data:
-        raw_name = str(row.get("COLUMNNAME", "")).strip().upper()
-        for key, label in metric_map.items():
-            if key in raw_name:
-                for p in periods:
-                    # Sum values if multiple rows match (e.g., Cash often appears twice)
-                    val_curr = row.get(p, 0.0)
-                    report[p][label] = report[p].get(label, 0.0) + val_curr
+        name = str(row.get("COLUMNNAME", "")).strip().upper()
+        
+        target_label = None
+        if name == "TOTAL ASSETS":
+            target_label = "Assets"
+        elif name == "TOTAL SHAREHOLDER'S FUND":
+            target_label = "Equity"
+        elif name == "LONG TERM BORROWINGS":
+            target_label = "LT Debt"
+        elif name == "SHORT TERM BORROWINGS":
+            target_label = "ST Debt"
+        # We use RID 26 specifically for the total Cash sub-header
+        elif name == "CASH AND CASH EQUIVALENTS" and row.get("RID") == 26:
+            target_label = "Cash"
+        
+        if target_label:
+            for p in periods:
+                report[p][target_label] = row.get(p, 0.0)
 
-    # 3. Format the response
-    lines = [f"### Balance Sheet [{'Standalone' if t=='S' else 'Consolidated'}]", "---"]
+    # 3. Build Response
+    lines = [f"## Balance Sheet ({'Standalone' if t=='S' else 'Consolidated'})", "---"]
     
     for p in periods:
-        year_label = f"FY {p[1:5]}"
         m = report[p]
+        assets = m.get("Assets", 0)
+        equity = m.get("Equity", 0)
+        lt_debt = m.get("LT Debt", 0)
+        st_debt = m.get("ST Debt", 0)
+        cash = m.get("Cash", 0)
         
-        # Calculate Total Debt for convenience
-        total_debt = m.get("LT Debt", 0) + m.get("ST Debt", 0)
+        # Financial Health Ratios
+        debt_to_equity = (lt_debt + st_debt) / equity if equity > 0 else 0
         
         lines.append(
-            f"**{year_label}**\n"
-            f"* **Total Assets:** ₹{m.get('Assets', 0):,.2f} Cr\n"
-            f"* **Equity:** ₹{m.get('Equity', 0):,.2f} Cr\n"
-            f"* **Total Debt:** ₹{total_debt:,.2f} Cr (LT: {m.get('LT Debt',0):.2f} | ST: {m.get('ST Debt',0):.2f})\n"
-            f"* **Cash & Equiv:** ₹{m.get('Cash', 0):,.2f} Cr\n"
+            f"### FY {p[1:5]}\n"
+            f"*   **Total Assets:** ₹{assets:,.2f} Cr\n"
+            f"*   **Shareholders' Fund:** ₹{equity:,.2f} Cr\n"
+            f"*   **Cash & Bank:** ₹{cash:,.2f} Cr\n"
+            f"*   **Debt-to-Equity:** {debt_to_equity:.2f}"
         )
+        
+        if (lt_debt + st_debt) > 0:
+            lines.append(f"    *(Total Debt: ₹{lt_debt + st_debt:,.2f} Cr)*")
+        else:
+            lines.append("    *Status: **Debt Free***")
 
     return "\n".join(lines)
 
@@ -3422,9 +2815,11 @@ def get_balance_sheet(co_code: int, report_type: str = "S") -> str:
     "Calculates Free Cash Flow (FCF) from raw data."
 ))
 def get_cash_flow(co_code: int, report_type: str = "S") -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    """
+    Fetches and summarizes the annual Cash Flow statement.
+    """
+    val, err = _require_int(co_code, "co_code", "get_cash_flow")
+    if err: return err
     
     t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
     url = EP["cash_flow"].format(co_code=val, t=t)
@@ -3434,49 +2829,56 @@ def get_cash_flow(co_code: int, report_type: str = "S") -> str:
         return f"Error fetching Cash Flow for code {val}."
 
     data = response_data.get("data", [])
-    if not data:
-        return "No cash flow data found."
+    if not data: return "No cash flow data found."
 
-    # 1. Identify Year Columns
+    # 1. Identify Fiscal Year (March) Columns
     periods = sorted(
-        [k for k in data[0].keys() if k.startswith("Y") and k[1:].isdigit()],
+        [k for k in data[0].keys() if k.startswith("Y") and k.endswith("03")],
         reverse=True
-    )
+    )[:5]
 
-    # 2. Map only the 'Summary' metrics to keep context clean
+    # 2. Extract specific summary metrics
     report = {p: {} for p in periods}
-    metric_map = {
-        "NET CASH GENERATED FROM (USED IN) OPERATIONS": "Operating",
-        "NET CASH PROVIDED BY (USED IN) INVESTING ACTIVITIES": "Investing",
-        "CASH PROVIDED BY (USED IN) FINANCING ACTIVITIES": "Financing",
-        "PURCHASE OF FIXED ASSETS": "Capex", # Needed to calculate Free Cash Flow
-        "CASH AND CASH EQUIVALENTS AT END": "Closing Cash"
-    }
-
     for row in data:
-        raw_name = str(row.get("COLUMNNAME", "")).strip().upper()
-        for key, label in metric_map.items():
-            if key == raw_name:
-                for p in periods:
-                    report[p][label] = row.get(p, 0.0)
+        name = str(row.get("COLUMNNAME", "")).strip().upper()
+        
+        # Mapping to the specific summary rows in the CMOTS JSON
+        target_label = None
+        if name == "NET CASH GENERATED FROM (USED IN) OPERATIONS":
+            target_label = "Operating"
+        elif name == "NET CASH PROVIDED BY (USED IN) INVESTING ACTIVITIES":
+            target_label = "Investing"
+        elif name == "CASH PROVIDED BY (USED IN) FINANCING ACTIVITIES":
+            target_label = "Financing"
+        elif name == "PURCHASE OF FIXED ASSETS":
+            target_label = "Capex"
+        elif name == "CASH AND CASH EQUIVALENTS AT END":
+            target_label = "ClosingCash"
+        
+        if target_label:
+            for p in periods:
+                report[p][target_label] = row.get(p, 0.0)
 
-    # 3. Format the response for the LLM
-    lines = [f"### Cash Flow Summary [{'Standalone' if t=='S' else 'Consolidated'}]", "---"]
+    # 3. Format Response
+    lines = [f"## Cash Flow Summary ({'Standalone' if t=='S' else 'Consolidated'})", "---"]
     
     for p in periods:
-        year_label = f"FY {p[1:5]}"
         m = report[p]
+        op_cash = m.get("Operating", 0)
+        inv_cash = m.get("Investing", 0)
+        fin_cash = m.get("Financing", 0)
+        capex = m.get("Capex", 0)
         
-        # Calculate Free Cash Flow: Operating Cash Flow + Capex (Capex is negative in the JSON)
-        fcf = m.get("Operating", 0) + m.get("Capex", 0)
+        # FCF is a key indicator of a company's ability to pay dividends/debt
+        fcf = op_cash + capex 
         
         lines.append(
-            f"**{year_label}**\n"
-            f"* **Operating CF:** ₹{m.get('Operating', 0):,.2f} Cr\n"
-            f"* **Investing CF:** ₹{m.get('Investing', 0):,.2f} Cr\n"
-            f"* **Financing CF:** ₹{m.get('Financing', 0):,.2f} Cr\n"
-            f"* **Free Cash Flow (FCF):** ₹{fcf:,.2f} Cr\n"
-            f"* **Closing Cash:** ₹{m.get('Closing Cash', 0):,.2f} Cr\n"
+            f"### FY {p[1:5]}\n"
+            f"*   **Cash from Operations:** ₹{op_cash:,.2f} Cr\n"
+            f"*   **Cash from Investing:** ₹{inv_cash:,.2f} Cr\n"
+            f"*   **Cash from Financing:** ₹{fin_cash:,.2f} Cr\n"
+            f"*   **Free Cash Flow:** ₹{fcf:,.2f} Cr\n"
+            f"*   **Closing Cash Balance:** ₹{m.get('ClosingCash', 0):,.2f} Cr"
         )
 
     return "\n".join(lines)
@@ -3487,68 +2889,86 @@ def get_cash_flow(co_code: int, report_type: str = "S") -> str:
     "Handles pivoted data where COLUMNNAME is the metric and Y-prefixed keys (e.g., Y202509) are periods."
 ))
 def get_half_yearly_results(co_code: int, report_type: str = "S") -> str:
-    """
-    Args:
-        co_code: CMOTS Company Code (e.g., 476).
-        report_type: 'S' for Standalone, 'C' for Consolidated.
-    """
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    val, err = _require_int(co_code, "co_code", "get_half_yearly_results")
+    if err: return err
     
     t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
     url = EP["half_yearly_results"].format(co_code=val, t=t)
     
     response_data, err = _get(url, f"HalfYearly[{val}]")
-    
     if err or not response_data.get("success"):
         return f"Error fetching half-yearly data for code {val}."
 
     data = response_data.get("data", [])
-    if not data:
-        return "No half-yearly results found."
+    if not data: return "No half-yearly results found."
 
-    # 1. Identify Period Columns (e.g., Y202509, Y202409)
+    # 1. Identify Period Columns
     periods = sorted(
         [k for k in data[0].keys() if k.startswith("Y") and k[1:].isdigit()],
         reverse=True
-    )
+    )[:4] # Keep it concise
 
-    # 2. Map Metrics based on the exact trace provided
+    # 2. Detect if this is a Bank (Look for 'Interest Earned')
+    is_bank = any("INTEREST EARNED" in str(row.get("COLUMNNAME", "")).upper() for row in data)
+
+    # 3. Define Metric Map based on Sector
+    if is_bank:
+        metric_map = {
+            "INTEREST EARNED": "Interest Income",
+            "OPERATING PROFIT": "Op Profit",
+            "NET PROFIT AFTER TAX": "PAT",
+            "EPS AFTER": "EPS",
+            "(%) GROSS NON PERFORMING ASSETS": "GNPA %",
+            "NET INTEREST MARGIN": "NIM %"
+        }
+    else:
+        metric_map = {
+            "NET SALES": "Sales",
+            "TOTAL EXPENSES": "Expenses",
+            "NET PROFIT AFTER TAX": "PAT",
+            "EPS AFTER": "EPS"
+        }
+
     report = {p: {} for p in periods}
-    metric_map = {
-        "NET SALES/INCOME FROM OPERATIONS": "Net Sales",
-        "TOTAL EXPENSES": "Total Expenses",
-        "TOTAL TAX": "Tax",
-        "NET PROFIT AFTER TAX FOR THE PERIOD": "PAT",
-        "BASIC": "EPS" # Matches 'EPS after Exceptional items-Basic'
-    }
-
     for row in data:
         raw_name = str(row.get("COLUMNNAME", "")).strip().upper()
         for key, label in metric_map.items():
             if key in raw_name:
+                # For EPS, specifically look for 'BASIC' to avoid diluted overlap
+                if label == "EPS" and "BASIC" not in raw_name:
+                    continue
                 for p in periods:
                     report[p][label] = row.get(p, 0.0)
 
-    # 3. Format into a professional summary
-    lines = [f"### Half-Yearly Financials [{'Standalone' if t=='S' else 'Consolidated'}]", "---"]
+    # 4. Format Output
+    sector_label = "Banking" if is_bank else "Corporate"
+    lines = [f"## Half-Yearly Results ({sector_label} | {'Standalone' if t=='S' else 'Consolidated'})", "---"]
     
     for p in periods:
-        # Format Y202509 -> Sep 2025 (H1 Ending)
-        year = p[1:5]
-        label = f"H1 Ending Sep {year}"
         m = report[p]
+        year = p[1:5]
         
-        lines.append(
-            f"**{label}**\n"
-            f"* **Net Sales:** ₹{m.get('Net Sales', 0):,.2f} Cr\n"
-            f"* **Total Expenses:** ₹{m.get('Total Expenses', 0):,.2f} Cr\n"
-            f"* **PAT:** ₹{m.get('PAT', 0):,.2f} Cr\n"
-            f"* **Tax Paid:** ₹{m.get('Tax', 0):,.2f} Cr | **EPS:** {m.get('EPS', 0):.2f}\n"
-        )
+        if is_bank:
+            # Banking Specific Formatting
+            lines.append(
+                f"### H1 Ending Sep {year}\n"
+                f"*   **Interest Earned:** ₹{m.get('Interest Income', 0):,.2f} Cr\n"
+                f"*   **Op Profit:** ₹{m.get('Op Profit', 0):,.2f} Cr | **PAT:** ₹{m.get('PAT', 0):,.2f} Cr\n"
+                f"*   **Asset Quality:** GNPA: **{m.get('GNPA %', 0):.2f}%** | NIM: **{m.get('NIM %', 0):.2f}%**\n"
+                f"*   **EPS:** {m.get('EPS', 0):.2f}"
+            )
+        else:
+            # Manufacturing/Service Formatting
+            lines.append(
+                f"### H1 Ending {year}\n"
+                f"*   **Net Sales:** ₹{m.get('Sales', 0):,.2f} Cr\n"
+                f"*   **PAT:** ₹{m.get('PAT', 0):,.2f} Cr\n"
+                f"*   **EPS:** {m.get('EPS', 0):.2f}"
+            )
 
     return "\n".join(lines)
+
+
 
 @mcp.tool(description=(
     "Fetches nine-month cumulative financial results (Revenue, Profit, Tax, EPS) from equifizapis.cmots.com. "
@@ -3556,95 +2976,127 @@ def get_half_yearly_results(co_code: int, report_type: str = "S") -> str:
 ))
 def get_nine_months_results(co_code: int, report_type: str = "S") -> str:
     """
-    Args:
-        co_code: CMOTS Company Code.
-        report_type: 'S' for Standalone, 'C' for Consolidated.
+    Fetches cumulative nine-month financial results (Apr-Dec).
     """
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    val, err = _require_int(co_code, "co_code", "get_nine_months_results")
+    if err: return err
     
     t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
-    # Derived from mapping image: Nine-Month-Result
     url = EP["nine_months_results"].format(co_code=val, t=t)
     
     response_data, err = _get(url, f"NineMonth[{val}]")
-    
     if err or not response_data.get("success"):
         return f"Error fetching nine-month data for code {val}."
 
     data = response_data.get("data", [])
-    if not data:
-        return "No nine-month results found."
+    if not data: return "No nine-month results found."
 
-    # 1. Identify Period Columns (e.g., Y202512, Y202412)
+    # 1. Identify Period Columns
     periods = sorted(
         [k for k in data[0].keys() if k.startswith("Y") and k[1:].isdigit()],
         reverse=True
-    )
+    )[:4]
 
-    # 2. Map Metrics based on the exact trace provided
+    # 2. Map Metrics
     report = {p: {} for p in periods}
-    metric_map = {
-        "NET SALES/INCOME FROM OPERATIONS": "Net Sales",
-        "TOTAL EXPENSES": "Total Expenses",
-        "TOTAL TAX": "Tax",
-        "NET PROFIT AFTER TAX FOR THE PERIOD": "PAT",
-        "BASIC": "EPS" # Matches 'EPS ... items-Basic'
-    }
-
     for row in data:
-        raw_name = str(row.get("COLUMNNAME", "")).strip().upper()
-        for key, label in metric_map.items():
-            if key in raw_name:
-                for p in periods:
-                    report[p][label] = row.get(p, 0.0)
+        name = str(row.get("COLUMNNAME", "")).strip().upper()
+        
+        # Mapping based on corporate/manufacturing structure in trace
+        if name == "NET SALES/INCOME FROM OPERATIONS":
+            label = "Sales"
+        elif name == "TOTAL EXPENSES":
+            label = "Expenses"
+        elif name == "TOTAL TAX":
+            label = "Tax"
+        elif name == "NET PROFIT AFTER TAX FOR THE PERIOD":
+            label = "PAT"
+        elif "EPS AFTER" in name and "BASIC" in name:
+            label = "EPS"
+        else:
+            continue
 
-    # 3. Format the Output
-    lines = [f"### Nine-Month Financials (Cumulative) [{'Standalone' if t=='S' else 'Consolidated'}]", "---"]
+        for p in periods:
+            report[p][label] = row.get(p, 0.0)
+
+    # 3. Format Output
+    lines = [f"## 9-Month Cumulative Results ({'Standalone' if t=='S' else 'Consolidated'})", "---"]
     
     for p in periods:
-        # Format Y202512 -> Dec 2025 (9M Ending)
-        year = p[1:5]
-        label = f"9M Ending Dec {year}"
         m = report[p]
+        year = p[1:5]
+        sales = m.get("Sales", 0)
+        pat = m.get("PAT", 0)
+        tax = m.get("Tax", 0)
+        
+        # Handle Tax Credits for clearer UX
+        tax_str = f"₹{abs(tax):,.2f} Cr {'(Credit)' if tax < 0 else '(Paid)'}"
+        margin = (pat / sales * 100) if sales > 0 else 0
         
         lines.append(
-            f"**{label}**\n"
-            f"* **Net Sales:** ₹{m.get('Net Sales', 0):,.2f} Cr\n"
-            f"* **Total Expenses:** ₹{m.get('Total Expenses', 0):,.2f} Cr\n"
-            f"* **PAT:** ₹{m.get('PAT', 0):,.2f} Cr\n"
-            f"* **Tax Paid:** ₹{m.get('Tax', 0):,.2f} Cr | **EPS:** {m.get('EPS', 0):.2f}\n"
+            f"### 9M Period Ending Dec {year}\n"
+            f"*   **Cumulative Sales:** ₹{sales:,.2f} Cr\n"
+            f"*   **Net Profit (PAT):** ₹{pat:,.2f} Cr (Margin: **{margin:.2f}%**)\n"
+            f"*   **Tax Provision:** {tax_str}\n"
+            f"*   **EPS:** {m.get('EPS', 0):.2f}"
         )
 
     return "\n".join(lines)
+
+
 
 
 @mcp.tool(description=(
+    "Fetches quarterly revenue and margin trends. "
+    "Useful for identifying seasonality and efficiency shifts over time."
     "Get quarterly revenue, EBITDA, and PAT trends. "
     "REQUIRES co_code — call resolve_nse_symbol first."
 ))
+
 def get_quarterly_trends(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_quarterly_trends")
     if err:
         return err
+        
     url = EP["q_trend_revenue"].format(co_code=val)
-    data, err = _get(url, f"QTrend[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
+    response_data, err = _get(url, f"QTrend[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching trends for code {val}."
+
+    data = response_data.get("data", [])
+    if not data:
         return "No quarterly trend data found."
-    lines = ["Quarterly Trends (Revenue / EBITDA / PAT):"]
-    for row in rows[:8]:
-        p = _pick(row, ["QuarterEndDate", "NetSales", "EBITDA", "PAT"])
+
+    # 1. Map the keys returned by the specific Trends API
+    lines = [f"## Quarterly Revenue & Margin Trends (Code: {val})", "---"]
+    
+    # Take the last 8 quarters to show a 2-year trend
+    for row in data[:8]:
+        yrc = str(row.get("yrc", ""))
+        revenue = row.get("NetRevenue", 0.0)
+        margin = row.get("GrossProfitmargin", 0.0)
+        
+        # Format YYYYMM -> e.g., Mar 2026
+        if len(yrc) == 6:
+            year, month = yrc[:4], yrc[4:]
+            mo_label = {"03": "Mar", "06": "Jun", "09": "Sep", "12": "Dec"}.get(month, month)
+            period_label = f"{mo_label} {year}"
+        else:
+            period_label = yrc
+
         lines.append(
-            f"  {str(p.get('QuarterEndDate',''))[:10]}"
-            f"  Rev: {p.get('NetSales','N/A')} Cr"
-            f"  EBITDA: {p.get('EBITDA','N/A')} Cr"
-            f"  PAT: {p.get('PAT','N/A')} Cr"
+            f"**{period_label}**\n"
+            f"*   **Net Revenue:** ₹{revenue:,.2f} Cr\n"
+            f"*   **Gross Margin:** {margin:.2f}%"
         )
+
     return "\n".join(lines)
+
 
 
 @mcp.tool(description=(
@@ -3653,56 +3105,48 @@ def get_quarterly_trends(co_code: int) -> str:
 ))
 def get_shareholding_pattern(co_code: int) -> str:
     """
-    Args:
-        co_code: CMOTS Company Code (e.g., 476).
+    Fetches and summarizes the shareholding structure over the last 5 quarters.
     """
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    val, err = _require_int(co_code, "co_code", "get_shareholding_pattern")
+    if err: return err
     
-    # Endpoint derived from your trace
     url = EP["shareholding_detailed"].format(co_code=val)
     response_data, err = _get(url, f"Shareholding[{val}]")
     
     if err or not response_data.get("success"):
-        return f"Error fetching shareholding for code {val}."
+        return f"Error fetching shareholding data for code {val}."
 
     data = response_data.get("data", [])
-    if not data:
-        return "No shareholding data found."
+    if not data: return "No shareholding data found."
 
-    lines = [f"### Shareholding Pattern Summary (Code: {val})", "---"]
+    lines = [f"## Shareholding Pattern (Code: {val})", "---"]
     
-    # Process the most recent 5 quarters
+    # Analyze the most recent 5 quarters
     for row in data[:5]:
-        # Parse period (YRC: 202603 -> Mar 2026)
+        # Date formatting: 202603 -> Mar 2026
         yrc = str(int(row.get("YRC", 0)))
         year, month = yrc[:4], yrc[4:]
         mo_label = {"03": "Mar", "06": "Jun", "09": "Sep", "12": "Dec"}.get(month, month)
         
-        # Extract RELEVANT data based on your JSON trace keys:
-        # Promoter: TotalPromoter_PerShares
-        # FII: PPIFII (Foreign Institutional Investors)
-        # DII: PPIMF + PPIINS (Mutual Funds + Insurance Companies)
-        # Public: PPSUBTOT (Non-Institutional Public)
-        # Custodian/GDRs: PGDR
-        
+        # Primary ownership categories from JSON keys
         promoter = row.get("TotalPromoter_PerShares", 0.0)
+        pledge = row.get("TotalPromoter_PerPledgeShares", 0.0)
         fii = row.get("PPIFII", 0.0)
         mf = row.get("PPIMF", 0.0)
         insurance = row.get("PPIINS", 0.0)
         public = row.get("PPSUBTOT", 0.0)
-        gdr = row.get("PGDR", 0.0) # For companies with global listings
         
-        dii = mf + insurance # Standard industry calculation
+        # DII is typically the sum of Mutual Funds and Insurance/Banks
+        dii = mf + insurance 
+        
+        pledge_str = f" (**{pledge:.2f}% Pledged**)" if pledge > 0 else " (No Pledge)"
         
         lines.append(
-            f"**{mo_label} {year}**\n"
-            f"* **Promoter:** {promoter:.2f}%\n"
-            f"* **FII (Foreign):** {fii:.2f}%\n"
-            f"* **DII (Domestic):** {dii:.2f}% (MF: {mf:.2f}%, Ins: {insurance:.2f}%)\n"
-            f"* **Public/Retail:** {public:.2f}%\n"
-            f"* **GDR/Others:** {gdr:.2f}%"
+            f"### {mo_label} {year}\n"
+            f"*   **Promoter:** {promoter:.2f}%{pledge_str}\n"
+            f"*   **FII (Foreign Inst):** {fii:.2f}%\n"
+            f"*   **DII (Domestic Inst):** {dii:.2f}% (MF: {mf:.2f}%, Ins: {insurance:.2f}%)\n"
+            f"*   **Public & Others:** {public:.2f}%"
         )
         
     return "\n".join(lines)
@@ -3714,12 +3158,10 @@ def get_shareholding_pattern(co_code: int) -> str:
 ))
 def get_major_shareholders(co_code: int) -> str:
     """
-    Args:
-        co_code: CMOTS Company Code (e.g., 476).
+    Fetches individuals/entities holding more than 1% (or significant stakes).
     """
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    val, err = _require_int(co_code, "co_code", "get_major_shareholders")
+    if err: return err
     
     url = EP["shareholding_1pct"].format(co_code=val)
     response_data, err = _get(url, f"MajorShareholders[{val}]")
@@ -3728,34 +3170,30 @@ def get_major_shareholders(co_code: int) -> str:
         return f"Error fetching major shareholders for code {val}."
 
     data = response_data.get("data", [])
-    if not data:
-        return "No major shareholder data found."
+    if not data: return "No major shareholder data found."
 
-    # 1. Filter and Sort: Only keep holders with stake > 0 and sort by highest stake
-    significant_holders = [
-        row for row in data 
-        if row.get("perstake", 0.0) > 0.1 # Using 0.1 to capture all non-zero entries
-    ]
-    significant_holders.sort(key=lambda x: x.get("perstake", 0.0), reverse=True)
+    # 1. Process data: Filter non-zero stakes and sort by highest ownership
+    holders = [d for d in data if d.get("perstake", 0) > 0]
+    holders.sort(key=lambda x: x.get("perstake", 0), reverse=True)
 
-    if not significant_holders:
-        return "No significant shareholders detected in the latest filing."
+    if not holders:
+        return "No major shareholders found for this company."
 
-    # 2. Format the response
-    header = f"### Major Shareholders - Code: {val} (As of {significant_holders[0].get('date', '')[:10]})"
-    lines = [header, "---"]
+    # 2. Build Markdown
+    filing_date = holders[0].get("date", "")[:10]
+    lines = [f"## Major Shareholders (As of {filing_date})", "---"]
     
-    for i, row in enumerate(significant_holders, 1):
-        name = row.get("Name", "Unknown").strip()
+    # 3. Categorize for better UX (Promoter vs Public Institutions)
+    for row in holders:
+        name = str(row.get("Name", "Unknown")).title().strip()
         stake = row.get("perstake", 0.0)
-        shares = row.get("NOOFshares", 0)
-        h_type = "Promoter" if "Promoter" in row.get("Type", "") else "Public"
+        h_type = "Promoter Group" if "Promoter" in row.get("Type", "") else "Public/Institutional"
         
-        # Highlight top institutional holders or large promoter chunks
+        # We use a simple bulleted list for clean scannability
         lines.append(
-            f"{i}. **{name}**\n"
-            f"   * Stake: **{stake:.2f}%** | Shares: {int(shares):,}\n"
-            f"   * Group: {h_type}"
+            f"*   **{name}**\n"
+            f"    *   Stake: **{stake:.2f}%** ({int(row.get('NOOFshares', 0)):,} shares)\n"
+            f"    *   Category: {h_type}"
         )
 
     return "\n".join(lines)
@@ -3767,68 +3205,70 @@ def get_major_shareholders(co_code: int) -> str:
 ))
 def get_yearly_results(co_code: int, report_type: str = "S") -> str:
     """
-    Args:
-        co_code: CMOTS Company Code (e.g., 476).
-        report_type: 'S' for Standalone, 'C' for Consolidated.
+    Fetches and formats audited annual financial results.
     """
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    val, err = _require_int(co_code, "co_code", "get_yearly_results")
+    if err: return err
     
     t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
-    # Derived from your terminal: Yearly-Results
     url = EP["get_yearly_results"].format(co_code=val, t=t)
     
     response_data, err = _get(url, f"YearlyResults[{val}]")
-    
     if err or not response_data.get("success"):
         return f"Error fetching annual results for code {val}."
 
     data = response_data.get("data", [])
-    if not data:
-        return "No annual results found."
+    if not data: return "No annual results found."
 
-    # 1. Identify Year Columns (e.g., Y202603, Y202503)
+    # 1. Identify Year Columns (FY ends in March '03')
     periods = sorted(
-        [k for k in data[0].keys() if k.startswith("Y") and k[1:].isdigit()],
+        [k for k in data[0].keys() if k.startswith("Y") and k.endswith("03")],
         reverse=True
-    )
+    )[:5] # Last 5 years for trend analysis
 
-    # 2. Map Metrics based on the exact trace provided
+    # 2. Map Metrics with strict normalization
     report = {p: {} for p in periods}
-    metric_map = {
-        "NET SALES/INCOME FROM OPERATIONS": "Net Sales",
-        "PROFIT FROM ORDINARY ACTIVITIES BEFORE TAX": "PBT",
-        "NET PROFIT AFTER TAX FOR THE PERIOD": "PAT",
-        "BASIC": "EPS",  # Matches 'EPS after Exceptional items-Basic'
-        "DIVIDEND PER SHARE(RS.)": "Dividend"
-    }
-
     for row in data:
-        raw_name = str(row.get("COLUMNNAME", "")).strip().upper()
-        for key, label in metric_map.items():
-            if key in raw_name:
-                for p in periods:
-                    report[p][label] = row.get(p, 0.0)
+        name = str(row.get("COLUMNNAME", "")).strip().upper()
+        
+        if name == "NET SALES/INCOME FROM OPERATIONS":
+            label = "Sales"
+        elif name == "PROFIT FROM ORDINARY ACTIVITIES BEFORE TAX":
+            label = "PBT"
+        elif name == "NET PROFIT AFTER TAX FOR THE PERIOD":
+            label = "PAT"
+        elif "EPS AFTER" in name and "BASIC" in name:
+            label = "EPS"
+        elif name == "DIVIDEND PER SHARE(RS.)":
+            label = "Dividend"
+        else:
+            continue
 
-    # 3. Format into a professional summary
-    lines = [f"### Annual Financial Reports [{'Standalone' if t=='S' else 'Consolidated'}]", "---"]
+        for p in periods:
+            report[p][label] = row.get(p, 0.0)
+
+    # 3. Format Output
+    lines = [f"## Audited Annual Results ({'Standalone' if t=='S' else 'Consolidated'})", "---"]
     
     for p in periods:
-        # Format Y202603 -> FY 2026
-        year = p[1:5]
-        label = f"FY {year}"
         m = report[p]
+        year = p[1:5]
+        sales = m.get("Sales", 0)
+        pat = m.get("PAT", 0)
+        
+        # Calculate annual margin
+        margin = (pat / sales * 100) if sales > 0 else 0
         
         lines.append(
-            f"**{label}**\n"
-            f"* **Net Sales:** ₹{m.get('Net Sales', 0):,.2f} Cr\n"
-            f"* **Profit Before Tax:** ₹{m.get('PBT', 0):,.2f} Cr\n"
-            f"* **Net Profit (PAT):** ₹{m.get('PAT', 0):,.2f} Cr\n"
-            f"* **EPS:** {m.get('EPS', 0):.2f} | **Dividend:** ₹{m.get('Dividend', 0):.2f}/sh"
+            f"### FY {year}\n"
+            f"*   **Total Revenue:** ₹{sales:,.2f} Cr\n"
+            f"*   **Profit Before Tax:** ₹{m.get('PBT', 0):,.2f} Cr\n"
+            f"*   **Net Profit (PAT):** ₹{pat:,.2f} Cr (Margin: **{margin:.2f}%**)\n"
+            f"*   **EPS:** {m.get('EPS', 0):.2f} | **Dividend:** ₹{m.get('Dividend', 0):.2f} per share"
         )
 
     return "\n".join(lines)
+
 
 @mcp.tool(description=(
     "Retrieves the most recent quarterly balance sheet data (Assets, Liabilities, Share Capital, Debt). "
@@ -3838,67 +3278,69 @@ def get_yearly_results(co_code: int, report_type: str = "S") -> str:
 ))
 def get_quarterly_balance_sheet(co_code: int, report_type: str = "S") -> str:
     """
-    Args:
-        co_code: CMOTS Company Code (e.g., 476).
-        report_type: 'S' for Standalone, 'C' for Consolidated.
+    Fetches the quarterly balance sheet snapshot.
     """
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    val, err = _require_int(co_code, "co_code", "get_quarterly_balance_sheet")
+    if err: return err
     
     t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
-    # Derived from your terminal: QuarterlyResults-BalanceSheet
     url = EP["get_quarterly_balance_sheet"].format(co_code=val, t=t)
     
     response_data, err = _get(url, f"QuarterlyBS[{val}]")
-    
     if err or not response_data.get("success"):
         return f"Error fetching quarterly balance sheet for code {val}."
 
     data = response_data.get("data", [])
-    if not data:
-        return "No quarterly balance sheet data found."
+    if not data: return "No data found."
 
-    # 1. Identify Period Columns (e.g., Y202603, Y202509)
+    # 1. Identify Period Columns (Latest 5 quarters)
     periods = sorted(
         [k for k in data[0].keys() if k.startswith("Y") and k[1:].isdigit()],
         reverse=True
-    )[:5] # Keep it concise for the LLM
+    )[:5]
 
-    # 2. Map Metrics based on the exact trace provided
+    # 2. Map Metrics with strict normalization
     report = {p: {} for p in periods}
-    metric_map = {
-        "TOTAL ASSETS": "Total Assets",
-        "SHARE CAPITAL": "Equity Capital",
-        "RESERVES & SURPLUS": "Reserves",
-        "LOAN FUNDS": "Total Debt",
-        "CASH & BANK BALANCE": "Cash Balance",
-        "NET CURRENT ASSETS": "Net Working Capital"
-    }
-
     for row in data:
-        raw_name = str(row.get("COLUMNNAME", "")).strip().upper()
-        for key, label in metric_map.items():
-            if key == raw_name:
-                for p in periods:
-                    report[p][label] = row.get(p, 0.0)
+        name = str(row.get("COLUMNNAME", "")).strip().upper()
+        
+        if name == "TOTAL ASSETS":
+            label = "Assets"
+        elif name == "SHARE CAPITAL":
+            label = "Capital"
+        elif name == "RESERVES & SURPLUS":
+            label = "Reserves"
+        elif name == "LOAN FUNDS":
+            label = "Debt"
+        elif name == "CASH & BANK BALANCE":
+            label = "Cash"
+        elif name == "NET CURRENT ASSETS":
+            label = "WorkingCap"
+        else:
+            continue
 
-    # 3. Format into a professional summary
-    lines = [f"### Quarterly Balance Sheet Summary [{'Standalone' if t=='S' else 'Consolidated'}]", "---"]
+        for p in periods:
+            report[p][label] = row.get(p, 0.0)
+
+    # 3. Build Response
+    lines = [f"## Quarterly Balance Sheet ({'Standalone' if t=='S' else 'Consolidated'})", "---"]
     
     for p in periods:
-        # Format Y202603 -> Mar 2026
         yr, mo = p[1:5], p[5:]
         mo_label = {"03": "Mar", "06": "Jun", "09": "Sep", "12": "Dec"}.get(mo, mo)
-        
         m = report[p]
+        
+        net_worth = m.get("Capital", 0) + m.get("Reserves", 0)
+        debt = m.get("Debt", 0)
+        d_e_ratio = (debt / net_worth) if net_worth > 0 else 0
+        
         lines.append(
-            f"**{mo_label} {yr}**\n"
-            f"* **Total Assets:** ₹{m.get('Total Assets', 0):,.2f} Cr\n"
-            f"* **Net Worth:** ₹{(m.get('Equity Capital', 0) + m.get('Reserves', 0)):,.2f} Cr\n"
-            f"* **Total Debt:** ₹{m.get('Total Debt', 0):,.2f} Cr\n"
-            f"* **Liquidity (Cash):** ₹{m.get('Cash Balance', 0):,.2f} Cr\n"
-            f"* **Working Capital:** ₹{m.get('Net Working Capital', 0):,.2f} Cr"
+            f"### {mo_label} {yr}\n"
+            f"*   **Total Assets:** ₹{m.get('Assets', 0):,.2f} Cr\n"
+            f"*   **Net Worth:** ₹{net_worth:,.2f} Cr\n"
+            f"*   **Debt-to-Equity:** {d_e_ratio:.2f} (Debt: ₹{debt:,.2f} Cr)\n"
+            f"*   **Cash & Bank:** ₹{m.get('Cash', 0):,.2f} Cr\n"
+            f"*   **Working Capital:** ₹{m.get('WorkingCap', 0):,.2f} Cr"
         )
 
     return "\n".join(lines)
@@ -3911,70 +3353,69 @@ def get_quarterly_balance_sheet(co_code: int, report_type: str = "S") -> str:
 ))
 def get_half_yearly_balance_sheet(co_code: int, report_type: str = "S") -> str:
     """
-    Args:
-        co_code: CMOTS Company Code (e.g., 476).
-        report_type: 'S' for Standalone, 'C' for Consolidated.
+    Fetches the half-yearly (H1) balance sheet snapshot.
     """
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    val, err = _require_int(co_code, "co_code", "get_half_yearly_balance_sheet")
+    if err: return err
     
     t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
-    # Derived from your terminal request URL
     url = EP["get_half_yearly_balance_sheet"].format(co_code=val, t=t)
     
     response_data, err = _get(url, f"HalfYearlyBS[{val}]")
-    
     if err or not response_data.get("success"):
         return f"Error fetching half-yearly balance sheet for code {val}."
 
     data = response_data.get("data", [])
-    if not data:
-        return "No half-yearly balance sheet data found."
+    if not data: return "No data found."
 
-    # 1. Identify Period Columns (e.g., Y202603, Y202509)
+    # 1. Identify Period Columns (Latest 5 H1/FY periods)
     periods = sorted(
         [k for k in data[0].keys() if k.startswith("Y") and k[1:].isdigit()],
         reverse=True
     )[:5]
 
-    # 2. Map Metrics based on the exact trace provided
+    # 2. Map Metrics with strict normalization
     report = {p: {} for p in periods}
-    metric_map = {
-        "TOTAL ASSETS": "Total Assets",
-        "SHARE CAPITAL": "Share Capital",
-        "RESERVES & SURPLUS": "Reserves",
-        "LOAN FUNDS": "Total Debt",
-        "CASH & BANK BALANCE": "Cash Balance",
-        "FIXED ASSETS": "Fixed Assets"
-    }
-
     for row in data:
-        raw_name = str(row.get("COLUMNNAME", "")).strip().upper()
-        for key, label in metric_map.items():
-            if key == raw_name:
-                for p in periods:
-                    report[p][label] = row.get(p, 0.0)
+        name = str(row.get("COLUMNNAME", "")).strip().upper()
+        
+        # Mapping to the 'Sources' and 'Application' structure of the API
+        if name == "TOTAL ASSETS":
+            label = "Assets"
+        elif name == "SHARE CAPITAL":
+            label = "Capital"
+        elif name == "RESERVES & SURPLUS":
+            label = "Reserves"
+        elif name == "LOAN FUNDS":
+            label = "Debt"
+        elif name == "CASH & BANK BALANCE":
+            label = "Cash"
+        elif name == "FIXED ASSETS":
+            label = "FixedAssets"
+        else:
+            continue
 
-    # 3. Format into a professional summary
-    lines = [f"### Half-Yearly Balance Sheet Summary [{'Standalone' if t=='S' else 'Consolidated'}]", "---"]
+        for p in periods:
+            report[p][label] = row.get(p, 0.0)
+
+    # 3. Build Response
+    lines = [f"## Half-Yearly Balance Sheet ({'Standalone' if t=='S' else 'Consolidated'})", "---"]
     
     for p in periods:
-        # Format Y202509 -> Sep 2025 (H1) or Y202603 -> Mar 2026 (FY End)
-        year, month = p[1:5], p[5:]
-        period_type = "H1 (Half-Year)" if month == "09" else "FY End"
-        mo_label = {"03": "Mar", "09": "Sep"}.get(month, month)
-        
+        yr, mo = p[1:5], p[5:]
+        period_label = "H1 (Sep)" if mo == "09" else "FY End (Mar)"
         m = report[p]
-        net_worth = m.get('Share Capital', 0) + m.get('Reserves', 0)
+        
+        net_worth = m.get("Capital", 0) + m.get("Reserves", 0)
+        debt = m.get("Debt", 0)
         
         lines.append(
-            f"**{mo_label} {year} ({period_type})**\n"
-            f"* **Total Assets:** ₹{m.get('Total Assets', 0):,.2f} Cr\n"
-            f"* **Net Worth:** ₹{net_worth:,.2f} Cr\n"
-            f"* **Total Debt (Loans):** ₹{m.get('Total Debt', 0):,.2f} Cr\n"
-            f"* **Cash Balance:** ₹{m.get('Cash Balance', 0):,.2f} Cr\n"
-            f"* **Fixed Assets:** ₹{m.get('Fixed Assets', 0):,.2f} Cr"
+            f"### {period_label} {yr}\n"
+            f"*   **Total Assets:** ₹{m.get('Assets', 0):,.2f} Cr\n"
+            f"*   **Net Worth (Equity):** ₹{net_worth:,.2f} Cr\n"
+            f"*   **Total Borrowings:** ₹{debt:,.2f} Cr\n"
+            f"*   **Fixed Assets (Net):** ₹{m.get('FixedAssets', 0):,.2f} Cr\n"
+            f"*   **Cash Position:** ₹{m.get('Cash', 0):,.2f} Cr"
         )
 
     return "\n".join(lines)
@@ -3988,69 +3429,69 @@ def get_half_yearly_balance_sheet(co_code: int, report_type: str = "S") -> str:
 ))
 def get_annual_balance_sheet(co_code: int, report_type: str = "S") -> str:
     """
-    Args:
-        co_code: CMOTS Company Code (e.g., 476).
-        report_type: 'S' for Standalone, 'C' for Consolidated.
+    Fetches and formats audited multi-year Balance Sheets.
     """
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    val, err = _require_int(co_code, "co_code", "get_annual_balance_sheet")
+    if err: return err
     
     t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
-    # Derived from your terminal trace URL
     url = EP["get_annual_balance_sheet"].format(co_code=val, t=t)
     
     response_data, err = _get(url, f"AnnualBS[{val}]")
-    
     if err or not response_data.get("success"):
         return f"Error fetching annual balance sheet for code {val}."
 
     data = response_data.get("data", [])
-    if not data:
-        return "No annual balance sheet data found."
+    if not data: return "No annual balance sheet data found."
 
-    # 1. Identify Fiscal Year Columns (e.g., Y202603, Y202503)
+    # 1. Identify Fiscal Year Columns (Ending in March '03')
     periods = sorted(
-        [k for k in data[0].keys() if k.startswith("Y") and k[1:].isdigit()],
+        [k for k in data[0].keys() if k.startswith("Y") and k.endswith("03")],
         reverse=True
-    )
+    )[:5]
 
-    # 2. Map Metrics based on the exact trace provided
+    # 2. Map Metrics with strict normalization
     report = {p: {} for p in periods}
-    metric_map = {
-        "TOTAL ASSETS": "Total Assets",
-        "SHARE CAPITAL": "Share Capital",
-        "RESERVES & SURPLUS": "Reserves",
-        "LOAN FUNDS": "Total Debt",
-        "FIXED ASSETS": "Fixed Assets",
-        "NET CURRENT ASSETS": "Net Working Capital"
-    }
-
     for row in data:
-        raw_name = str(row.get("COLUMNNAME", "")).strip().upper()
-        for key, label in metric_map.items():
-            if key == raw_name:
-                for p in periods:
-                    report[p][label] = row.get(p, 0.0)
+        name = str(row.get("COLUMNNAME", "")).strip().upper()
+        
+        if name == "TOTAL ASSETS":
+            label = "Assets"
+        elif name == "SHARE CAPITAL":
+            label = "Capital"
+        elif name == "RESERVES & SURPLUS":
+            label = "Reserves"
+        elif name == "LOAN FUNDS":
+            label = "Debt"
+        elif name == "FIXED ASSETS":
+            label = "FixedAssets"
+        elif name == "NET CURRENT ASSETS":
+            label = "WorkingCap"
+        else:
+            continue
 
-    # 3. Format into a professional summary
-    lines = [f"### Annual Balance Sheet Summary [{'Standalone' if t=='S' else 'Consolidated'}]", "---"]
+        for p in periods:
+            report[p][label] = row.get(p, 0.0)
+
+    # 3. Format Output
+    lines = [f"## Audited Annual Balance Sheet ({'Standalone' if t=='S' else 'Consolidated'})", "---"]
     
     for p in periods:
-        year = p[1:5]
-        label = f"FY {year} (Ended Mar)"
         m = report[p]
+        year = p[1:5]
+        net_worth = m.get("Capital", 0) + m.get("Reserves", 0)
+        debt = m.get("Debt", 0)
         
-        # Calculate Net Worth for the LLM
-        net_worth = m.get('Share Capital', 0) + m.get('Reserves', 0)
+        # Calculate Solvency (Debt-to-Equity)
+        d_e_ratio = (debt / net_worth) if net_worth > 0 else 0
         
         lines.append(
-            f"**{label}**\n"
-            f"* **Net Worth:** ₹{net_worth:,.2f} Cr\n"
-            f"* **Total Debt:** ₹{m.get('Total Debt', 0):,.2f} Cr\n"
-            f"* **Total Assets:** ₹{m.get('Total Assets', 0):,.2f} Cr\n"
-            f"* **Fixed Assets:** ₹{m.get('Fixed Assets', 0):,.2f} Cr\n"
-            f"* **Net Working Capital:** ₹{m.get('Net Working Capital', 0):,.2f} Cr"
+            f"### FY {year}\n"
+            f"*   **Net Worth (Equity):** ₹{net_worth:,.2f} Cr\n"
+            f"*   **Total Debt:** ₹{debt:,.2f} Cr (D/E Ratio: **{d_e_ratio:.2f}**)\n"
+            f"*   **Fixed Assets:** ₹{m.get('FixedAssets', 0):,.2f} Cr\n"
+            f"*   **Net Working Capital:** ₹{m.get('WorkingCap', 0):,.2f} Cr\n"
+            f"*   **Total Assets:** ₹{m.get('Assets', 0):,.2f} Cr"
         )
 
     return "\n".join(lines)
@@ -4091,23 +3532,47 @@ def get_ttm_growth_trends(co_code: int, report_type: str = "S") -> str:
     "or gross margin expansion over time. REQUIRES co_code."
 ))
 def get_quarterly_revenue_trends(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_quarterly_revenue_trends")
     if err: return err
+    
+    # URL matches the trace: QuarterlyTrendsrevenue
     url = EP["get_quarterly_revenue_trends"].format(co_code=val)
     
     response_data, err = _get(url, f"RevTrend[{val}]")
     if err or not response_data.get("success"):
-        return f"Error fetching revenue trends."
+        return f"Error fetching revenue trends for code {val}."
 
     data = response_data.get("data", [])
-    lines = [f"### Quarterly Revenue & Gross Margin Trends", "---"]
-    for row in data[:6]:
-        yrc = str(int(row.get("yrc", 0)))
+    if not data:
+        return "No quarterly trend data found."
+
+    lines = [f"## Quarterly Revenue & Gross Margin Trends (Code: {val})", "---"]
+    
+    # Analyze the most recent 8 quarters to provide a 2-year comparative view
+    for row in data[:8]:
+        # Format the YRC (202603 -> Mar 2026)
+        yrc_raw = str(int(row.get("yrc", 0)))
+        if len(yrc_raw) == 6:
+            year, month = yrc_raw[:4], yrc_raw[4:]
+            mo_label = {"03": "Mar", "06": "Jun", "09": "Sep", "12": "Dec"}.get(month, month)
+            period = f"{mo_label} {year}"
+        else:
+            period = yrc_raw
+
+        # Correcting the keys to match the API's CamelCase response
+        revenue = row.get("NetRevenue", 0.0)
+        margin = row.get("GrossProfitmargin", 0.0)
+        
         lines.append(
-            f"**Quarter: {yrc}**\n"
-            f"* **Net Revenue:** ₹{row.get('netrevenue', 0):,.2f} Cr\n"
-            f"* **Gross Profit Margin:** {row.get('grossprofitmargin', 0):.2f}%"
+            f"**{period}**\n"
+            f"*   **Net Revenue:** ₹{revenue:,.2f} Cr\n"
+            f"*   **Gross Profit Margin:** {margin:.2f}%"
         )
+
     return "\n".join(lines)
 
 
@@ -4117,23 +3582,47 @@ def get_quarterly_revenue_trends(co_code: int) -> str:
     "cash-level profitability, and margin stability. REQUIRES co_code."
 ))
 def get_quarterly_ebitda_trends(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_quarterly_ebitda_trends")
     if err: return err
+    
+    # URL matches the trace: QuarterlyTrendEBITDA
     url = EP["get_quarterly_ebitda_trends"].format(co_code=val)
     
     response_data, err = _get(url, f"EBITDATrend[{val}]")
     if err or not response_data.get("success"):
-        return f"Error fetching EBITDA trends."
+        return f"Error fetching EBITDA trends for code {val}."
 
     data = response_data.get("data", [])
-    lines = [f"### Quarterly EBITDA & Margin Trends", "---"]
-    for row in data[:6]:
-        yrc = str(int(row.get("yrc", 0)))
+    if not data:
+        return "No EBITDA trend data found."
+
+    lines = [f"## Quarterly EBITDA & Margin Trends (Code: {val})", "---"]
+    
+    # Analyze the most recent 8 quarters for a 2-year operational view
+    for row in data[:8]:
+        # Format the YRC (e.g., 202603 -> Mar 2026)
+        yrc_raw = str(int(row.get("yrc", 0)))
+        if len(yrc_raw) == 6:
+            year, month = yrc_raw[:4], yrc_raw[4:]
+            mo_label = {"03": "Mar", "06": "Jun", "09": "Sep", "12": "Dec"}.get(month, month)
+            period = f"{mo_label} {year}"
+        else:
+            period = yrc_raw
+
+        # Correcting the keys to match the API's CamelCase response
+        ebitda = row.get("EBITDA", 0.0)
+        margin = row.get("EBITDAMargin", 0.0)
+        
         lines.append(
-            f"**Quarter: {yrc}**\n"
-            f"* **EBITDA:** ₹{row.get('ebitda', 0):,.2f} Cr\n"
-            f"* **EBITDA Margin:** {row.get('ebitdamargin', 0):.2f}%"
+            f"**{period}**\n"
+            f"*   **EBITDA:** ₹{ebitda:,.2f} Cr\n"
+            f"*   **EBITDA Margin:** {margin:.2f}%"
         )
+
     return "\n".join(lines)
 
 @mcp.tool(description=(
@@ -4142,23 +3631,47 @@ def get_quarterly_ebitda_trends(co_code: int) -> str:
     "and core business profitability. REQUIRES co_code."
 ))
 def get_quarterly_ebit_trends(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_quarterly_ebit_trends")
     if err: return err
+    
+    # URL matches the trace: QuarterlyTrendEBIT
     url = EP["get_quarterly_ebit_trends"].format(co_code=val)
     
     response_data, err = _get(url, f"EBITTrend[{val}]")
     if err or not response_data.get("success"):
-        return f"Error fetching EBIT trends."
+        return f"Error fetching EBIT trends for code {val}."
 
     data = response_data.get("data", [])
-    lines = [f"### Quarterly EBIT & Operating Margin Trends", "---"]
-    for row in data[:6]:
-        yrc = str(int(row.get("yrc", 0)))
+    if not data:
+        return "No EBIT trend data found."
+
+    lines = [f"## Quarterly EBIT & Operating Margin Trends (Code: {val})", "---"]
+    
+    # Analyze the most recent 8 quarters for a 2-year comparative view
+    for row in data[:8]:
+        # Format the YRC (e.g., 202603 -> Mar 2026)
+        yrc_raw = str(int(row.get("yrc", 0)))
+        if len(yrc_raw) == 6:
+            year, month = yrc_raw[:4], yrc_raw[4:]
+            mo_label = {"03": "Mar", "06": "Jun", "09": "Sep", "12": "Dec"}.get(month, month)
+            period = f"{mo_label} {year}"
+        else:
+            period = yrc_raw
+
+        # Correcting the keys to match the API's CamelCase response
+        ebit = row.get("EBIT", 0.0)
+        margin = row.get("EBITMargin", 0.0)
+        
         lines.append(
-            f"**Quarter: {yrc}**\n"
-            f"* **EBIT (Op. Profit):** ₹{row.get('ebit', 0):,.2f} Cr\n"
-            f"* **EBIT Margin:** {row.get('ebitmargin', 0):.2f}%"
+            f"**{period}**\n"
+            f"*   **EBIT (Op. Profit):** ₹{ebit:,.2f} Cr\n"
+            f"*   **EBIT Margin:** {margin:.2f}%"
         )
+
     return "\n".join(lines)
 
 
@@ -4173,12 +3686,11 @@ def get_growth_data_quarterly(co_code: int, report_type: str = "S") -> str:
         co_code: CMOTS Company Code.
         report_type: 'S' for Standalone, 'C' for Consolidated.
     """
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
+    val, err = _require_int(co_code, "co_code", "get_growth_data_quarterly")
     if err: return err
     
     t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
-    # Endpoint from image: GrowthDataQuarterly
-    url = EP["gget_growth_data_quarterly"].format(co_code=val, t=t)
+    url = EP["get_growth_data_quarterly"].format(co_code=val, t=t)
     
     response_data, err = _get(url, f"QtrGrowth[{val}]")
     if err or not response_data.get("success"):
@@ -4187,21 +3699,29 @@ def get_growth_data_quarterly(co_code: int, report_type: str = "S") -> str:
     data = response_data.get("data", [])
     if not data: return "No quarterly growth records found."
 
-    lines = [f"### Quarterly Growth Trends (YoY) [{'Standalone' if t=='S' else 'Consolidated'}]", "---"]
+    lines = [f"## Quarterly Growth Trends (YoY) ({'Standalone' if t=='S' else 'Consolidated'})", "---"]
     
+    # Show last 6 quarters for a clear trend line
     for row in data[:6]:
-        yrc = str(int(row.get("yrc", 0)))
-        # Mapping: Pat_Growth_Qtr, NetSales_Growth_Qtr
+        yrc_raw = str(int(row.get("yrc", 0)))
+        if len(yrc_raw) == 6:
+            year, month = yrc_raw[:4], yrc_raw[4:]
+            mo_label = {"03": "Mar", "06": "Jun", "09": "Sep", "12": "Dec"}.get(month, month)
+            period = f"{mo_label} {year}"
+        else:
+            period = yrc_raw
+
         pat_g = row.get("Pat_Growth_Qtr", 0.0)
         sales_g = row.get("NetSales_Growth_Qtr", 0.0)
         
+        # Using :+.2f to automatically show + or - signs for growth
         lines.append(
-            f"**Quarter Ending: {yrc}**\n"
-            f"* **Net Sales Growth:** {sales_g:+.2f}%\n"
-            f"* **PAT Growth:** {pat_g:+.2f}%"
+            f"### {period}\n"
+            f"*   **Net Sales Growth:** {sales_g:+.2f}%\n"
+            f"*   **Net Profit (PAT) Growth:** {pat_g:+.2f}%"
         )
+        
     return "\n".join(lines)
-
 
 @mcp.tool(description=(
     "Retrieves annual growth percentages for Net Sales and PAT (Profit After Tax). "
@@ -4214,11 +3734,10 @@ def get_growth_data_yearly(co_code: int, report_type: str = "S") -> str:
         co_code: CMOTS Company Code.
         report_type: 'S' for Standalone, 'C' for Consolidated.
     """
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
+    val, err = _require_int(co_code, "co_code", "get_growth_data_yearly")
     if err: return err
     
     t = report_type.upper() if report_type.upper() in ("S", "C") else "S"
-    # Endpoint from image: GrowthDataYearly
     url = EP["get_growth_data_yearly"].format(co_code=val, t=t)
     
     response_data, err = _get(url, f"YearlyGrowth[{val}]")
@@ -4228,19 +3747,23 @@ def get_growth_data_yearly(co_code: int, report_type: str = "S") -> str:
     data = response_data.get("data", [])
     if not data: return "No yearly growth records found."
 
-    lines = [f"### Annual Growth Trends (YoY) [{'Standalone' if t=='S' else 'Consolidated'}]", "---"]
+    lines = [f"## Annual Growth Trends (YoY) ({'Standalone' if t=='S' else 'Consolidated'})", "---"]
     
+    # Analyze the last 5 fiscal years
     for row in data[:5]:
-        yrc = str(int(row.get("yrc", 0)))
-        # Mapping: Pat_Growth_Yearly, NetSales_Growth_Yearly
+        yrc_raw = str(int(row.get("yrc", 0)))
+        year = yrc_raw[:4]
+        
         pat_g = row.get("Pat_Growth_Yearly", 0.0)
         sales_g = row.get("NetSales_Growth_Yearly", 0.0)
         
+        # Using :+.2f to clearly distinguish growth from contraction
         lines.append(
-            f"**Fiscal Year: {yrc[:4]}**\n"
-            f"* **Annual Sales Growth:** {sales_g:+.2f}%\n"
-            f"* **Annual PAT Growth:** {pat_g:+.2f}%"
+            f"### FY {year}\n"
+            f"*   **Net Sales Growth:** {sales_g:+.2f}%\n"
+            f"*   **Net Profit (PAT) Growth:** {pat_g:+.2f}%"
         )
+        
     return "\n".join(lines)
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -4258,77 +3781,100 @@ def get_company_profile(co_code: int) -> str:
     Args:
         co_code: CMOTS Company Code.
     """
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    val, err = _require_int(co_code, "co_code", "get_company_profile")
+    if err: return err
     
-    # Endpoint derived from your mapping: CompanyProfile/{co_code}
     url = EP["company_profile"].format(co_code=val)
-    data, err = _get(url, f"CompanyProfile[{val}]")
+    response_data, err = _get(url, f"CompanyProfile[{val}]")
     
-    if err:
-        return err
+    if err or not response_data.get("success"):
+        return f"Error fetching company profile for code {val}."
         
-    rows = _rows(data)
-    if not rows:
+    data = response_data.get("data", [])
+    if not data:
         return "No company profile data found."
     
-    r = rows[0]
+    r = data[0]
     
-    # Precise mapping based on image_a3927c.png
-    # Note: 'lname' is the full company name in CMOTS
-    # 'ind_l_name' is the Industry name
+    # Mapping based on UPPERCASE keys found in your terminal trace
+    # Handling Address logic: Use HO address if available, fallback to REG address
+    city = r.get("ho_city") or r.get("REGDIST") or ""
+    state = r.get("ho_statename") or r.get("REGSTATE") or ""
+    pin = r.get("ho_pin") or r.get("REGPIN") or ""
+    addr_line = f"{r.get('REGADD1', '')} {r.get('REGADD2', '')}".strip()
+
     p = {
-        "Company": r.get("lname", "N/A"),
-        "ISIN": r.get("isin", "N/A"),
-        "Industry": r.get("ind_l_name", "N/A"),
-        "Incorporated": r.get("inc_dt", "N/A"),
-        "Chairman": r.get("chairman", "N/A"),
-        "Auditor": r.get("auditor", "N/A"),
-        "Face Value": r.get("fv", "N/A"),
-        "Market Lot": r.get("mkt_lot", "N/A"),
-        # Combining Head Office address fields correctly
-        "Address": f"{r.get('ho_add1', '')} {r.get('ho_add2', '')}, {r.get('ho_city', '')}, {r.get('ho_statename', '')} - {r.get('regpin', '')}".strip(", "),
-        "Email": r.get("email", "N/A"),
-        "Website": r.get("internet", "N/A"),
-        "Phone": r.get("tel1", "N/A")
+        "Full Name": r.get("LNAME"),
+        "Industry": r.get("ind_l_name"),
+        "Group": r.get("HSE_S_NAME"),
+        "ISIN": r.get("ISIN"),
+        "Incorporated": r.get("INC_DT"),
+        "Chairman": r.get("CHAIRMAN"),
+        "Auditor": r.get("AUDITOR"),
+        "Face Value": f"₹{r.get('FV')}",
+        "Address": f"{addr_line}, {city}, {state} - {pin}".strip(", -"),
+        "Website": r.get("INTERNET"),
+        "Email": r.get("EMAIL")
     }
 
-    # Formatting as a clean Markdown list for the LLM
-    header = f"### Company Profile: {p['Company']}"
-    lines = [header, "---"]
+    # Formatting for the LLM
+    lines = [f"## Company Profile: {p['Full Name']}", "---"]
     
     for label, value in p.items():
-        if label != "Company" and value and value != "N/A":
+        if label != "Full Name" and value and str(value).strip() not in ("", "None"):
             lines.append(f"* **{label}:** {value}")
 
     return "\n".join(lines)
 
 
-
 @mcp.tool(description=(
-    "Get company business background / description. "
+    "Fetches the business background and sector classification of a company. "
+    "Use this for queries about what a company does or its history. "
     "REQUIRES co_code — call resolve_nse_symbol first."
 ))
 def get_company_background(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_company_background")
+    if err: return err
+    
     url = EP["comp_background"].format(co_code=val)
-    data, err = _get(url, f"CompBackground[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No company background data found."
-    r = rows[0]
-    # Return the text fields useful for the LLM to answer
-    p = _pick(r, ["lname", "ind_l_name", "isin", "memo", "background"])
-    return (
-        f"Company: {p.get('lname','N/A')} | Industry: {p.get('ind_l_name','N/A')}\n"
-        f"{p.get('memo') or p.get('background','Background text available from API.')}"
-    )
+    response_data, err = _get(url, f"CompBackground[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching background for code {val}."
 
+    data = response_data.get("data", [])
+    if not data:
+        return "No company background data found."
+    
+    r = data[0]
+
+    # Map using UPPERCASE keys as seen in the terminal trace
+    # HSE_S_NAME provides the parent group identity (e.g., ITC, Tata, Reliance)
+    # ind_l_name provides the specific sector (e.g., Cigarettes, FMCG)
+    name = r.get("LNAME", "N/A")
+    group = r.get("HSE_S_NAME", "N/A")
+    sector = r.get("ind_l_name", "N/A")
+    inc_year = r.get("INC_DT", "N/A")
+    
+    # Memo/Background fields are often used for long-form descriptions
+    description = r.get("memo") or r.get("background") or "Detailed description currently unavailable in the database."
+
+    lines = [
+        f"## Business Background: {name}",
+        "---",
+        f"* **Sector:** {sector}",
+        f"* **Group:** {group}",
+        f"* **Incorporated:** {inc_year}",
+        "",
+        "### Overview",
+        description
+    ]
+
+    return "\n".join(lines)
 
 @mcp.tool(description=(
     "Get board of directors with names and designations. "
