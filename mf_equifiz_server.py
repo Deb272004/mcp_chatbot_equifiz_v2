@@ -24,6 +24,9 @@ import requests
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 from rapidfuzz import fuzz
+from rich.console import Console
+console = Console()
+
 
 load_dotenv()
 
@@ -3877,514 +3880,745 @@ def get_company_background(co_code: int) -> str:
     return "\n".join(lines)
 
 @mcp.tool(description=(
-    "Get board of directors with names and designations. "
+    "Fetches the list of the Board of Directors, including names and designations. "
+    "Use this for corporate governance queries or to identify key leadership. "
     "REQUIRES co_code — call resolve_nse_symbol first."
 ))
 def get_board_of_directors(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_board_of_directors")
+    if err: return err
+    
     url = EP["board_of_directors"].format(co_code=val)
-    data, err = _get(url, f"BoardOfDirectors[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
+    response_data, err = _get(url, f"BoardOfDirectors[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching board data for code {val}."
+
+    data = response_data.get("data", [])
+    if not data:
         return "No board of directors data found."
-    lines = ["Board of Directors:"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, ["dir_name", "dir_desg"])
-        lines.append(f"  {i:>3}. {p.get('dir_name','N/A'):<40} — {p.get('dir_desg','N/A')}")
+
+    # Extract the reporting year from the first entry if available
+    as_of_year = int(data[0].get("year", 0)) if data[0].get("year") else "Current"
+    
+    lines = [f"## Board of Directors (As of {as_of_year})", "---"]
+    
+    for row in data:
+        name = str(row.get("dir_name", "Unknown")).strip()
+        designation = str(row.get("dir_desg", "Director")).strip()
+        
+        # Use bolding for names and italics for designations for a clean professional look
+        lines.append(f"*   **{name}**\n    *{designation}*")
+
     return "\n".join(lines)
 
 
 @mcp.tool(description=(
-    "Get company's banking partners. "
+    "Retrieves the list of a company's banking partners as disclosed in their annual reports. "
+    "Use this for queries regarding a company's credit relationships. "
     "REQUIRES co_code — call resolve_nse_symbol first."
 ))
 def get_company_bankers(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_company_bankers")
+    if err: return err
+    
     url = EP["bankers"].format(co_code=val)
-    data, err = _get(url, f"Bankers[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
+    response_data, err = _get(url, f"Bankers[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching banker data for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
         return "No banker data found."
-    lname = rows[0].get("lname", "N/A")
-    banks = [r.get("bnk_name", "") for r in rows if r.get("bnk_name")]
-    return f"Bankers for {lname}:\n" + "\n".join(f"  • {b}" for b in banks)
+    
+    # Map using UPPERCASE keys as seen in the terminal trace
+    company_name = data[0].get("LNAME", "N/A")
+    
+    # Filter and collect bank names, excluding placeholder text
+    banks = []
+    for r in data:
+        bank_name = r.get("BNK_NAME", "").strip()
+        if bank_name and "No Bankers Details" not in bank_name:
+            banks.append(bank_name)
+    
+    if not banks:
+        return f"No specific banking partners are currently listed for **{company_name}** in the available filings."
+
+    # Format into a clean Markdown list
+    lines = [f"## Banking Partners: {company_name}", "---"]
+    for b in banks:
+        lines.append(f"* {b}")
+        
+    return "\n".join(lines)
+
 
 
 @mcp.tool(description=(
-    "Get management team names, designations, and brief professional backgrounds. "
-    "Note: Detailed biographies are summarized to maintain context efficiency."
+    "Fetches professional backgrounds of key management or a detailed corporate evolution history. "
+    "Use this for queries about leadership experience or the company's historical growth. "
+    "REQUIRES co_code — call resolve_nse_symbol first."
 ))
 def get_management_biodata(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
-        
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_management_biodata")
+    if err: return err
+    
     url = EP["biodata"].format(co_code=val)
-    data, err = _get(url, f"Biodata[{val}]")
-    if err:
-        return err
-        
-    rows = _rows(data)
-    if not rows:
-        return "No management biodata found."
+    response_data, err = _get(url, f"Biodata[{val}]")
     
-    company_name = rows[0].get("lname", "N/A")
-    lines = [f"### Management Team — {company_name}:"]
-    
-    for i, row in enumerate(rows[:12], 1):  # Limit to top 12 executives to prevent massive responses
-        desc = row.get('ShortDescription', 'N/A').strip()
-        memo = row.get('memo', "").strip()
+    if err or not response_data.get("success"):
+        return f"Error fetching biodata for code {val}."
         
-        # --- INTELLIGENT BIODATA TRUNCATION ---
-        # If there is a long biography, extract only the first 2-3 sentences.
-        # This usually covers their total experience and education.
-        if memo:
-            # Simple regex to grab the first two sentences
-            sentences = re.findall(r'[^.!?]+[.!?]', memo)
-            summary = " ".join(sentences[:2]) if sentences else memo[:200]
+    data = response_data.get("data", [])
+    if not data:
+        return "No management or company biodata found."
+    
+    company_name = data[0].get("LNAME", "N/A")
+    lines = [f"## Management & Corporate Biodata: {company_name}", "---"]
+
+    # Check if the API returned a massive single 'MEMO' block (Corporate History)
+    # or multiple rows (Individual Executive Bios)
+    if len(data) == 1 and data[0].get("MEMO"):
+        memo_text = data[0].get("MEMO", "").strip()
+        # Summarize massive corporate history to fit context windows
+        # Grabbing the first few paragraphs or approximately 1500 chars
+        evolution_summary = memo_text[:1500].replace('\r\n', '\n')
+        lines.append("### Corporate Evolution & Business Segments")
+        lines.append(evolution_summary + "...")
+        lines.append("\n*Note: This company provides a historical narrative rather than individual bios via this endpoint.*")
+    else:
+        # Handling multiple rows (Individual Biographies)
+        for i, row in enumerate(data[:8], 1):
+            # Normalizing keys based on potential lowercase/uppercase variations
+            name = row.get("ShortDescription") or row.get("DIR_NAME") or "Executive"
+            bio = row.get("MEMO") or row.get("memo") or "Professional background not detailed."
             
-            lines.append(f"{i}. **{desc}**")
+            # Extract first 2-3 sentences for a concise summary
+            import re
+            sentences = re.findall(r'[^.!?]+[.!?]', bio)
+            summary = " ".join(sentences[:3]) if sentences else bio[:300]
+            
+            lines.append(f"{i}. **{name}**")
             lines.append(f"   *Background:* {summary}...")
-        else:
-            lines.append(f"{i}. **{desc}** (No detailed biography available)")
 
     final_output = "\n".join(lines)
-    
-    # Final safeguard for token window
-    if len(final_output) > 4000:
-        return final_output[:3800] + "\n\n[... List truncated for brevity ...]"
-        
-    return final_output
+    return final_output if len(final_output) < 4000 else final_output[:3800] + "\n\n[... Truncated ...]"
 
 
 @mcp.tool(description=(
-    "Get subsidiaries, joint ventures, and collaborations. "
+    "Retrieves the list of subsidiaries, joint ventures, and international collaborations. "
+    "Use this for queries regarding a company's corporate structure or global partnerships. "
     "REQUIRES co_code — call resolve_nse_symbol first."
 ))
 def get_subsidiaries_jvs(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_subsidiaries_jvs")
+    if err: return err
+    
     url = EP["subsidiaries"].format(co_code=val)
-    data, err = _get(url, f"Subsidiaries[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No subsidiary / JV data found."
-    lname = rows[0].get("lname", "N/A")
-    lines = [f"Subsidiaries & JVs — {lname}:"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, ["coll_name", "coll_ctry", "PERC_SH"])
-        lines.append(
-            f"  {i:>3}. {p.get('coll_name','N/A')}"
-            f"  [{p.get('coll_ctry','')}]"
-            f"  Stake: {p.get('PERC_SH','N/A')}%"
-        )
+    response_data, err = _get(url, f"Subsidiaries[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching subsidiary data for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No subsidiary, JV, or collaboration data found."
+    
+    # Map using UPPERCASE keys as seen in the terminal trace
+    company_name = data[0].get("LNAME", "N/A")
+    lines = [f"## Subsidiaries, JVs & Collaborations: {company_name}", "---"]
+
+    for i, row in enumerate(data, 1):
+        coll_name = row.get("COLL_NAME", "Unknown Entity")
+        country = row.get("COLL_Country") or row.get("COLL_CTRY") or "N/A"
+        stake = row.get("PERC_SH", 0.0)
+        
+        # If stake is 0.0, it's usually a Technical/Strategic Collaboration
+        stake_str = f"Stake: **{stake:.2f}%**" if stake > 0 else "*(Technical/Strategic Collaboration)*"
+        
+        lines.append(f"{i}. **{coll_name}**")
+        lines.append(f"   * Country: {country}")
+        lines.append(f"   * {stake_str}")
+
     return "\n".join(lines)
 
+
 @mcp.tool(description=(
-    "Get Related Party Transactions (RAG). "
-    "Summarizes transactions with subsidiaries, JVs, and KMPs for the most recent financial year."
+    "Summarizes transactions with subsidiaries, JVs, and Key Management Personnel (KMP). "
+    "Use this to identify corporate governance risks and inter-group dependencies. "
+    "REQUIRES co_code — call resolve_nse_symbol first."
 ))
 def get_related_party_transactions(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
-        
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_related_party_transactions")
+    if err: return err
+    
     url = EP["related_party_transactions"].format(co_code=val)
-    data, err = _get(url, f"RelatedPartyTransactions[{val}]")
-    if err:
-        return err
+    response_data, err = _get(url, f"RelatedPartyTransactions[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching related party data for code {val}."
         
-    rows = _rows(data)
-    if not rows:
+    data = response_data.get("data", [])
+    if not data:
         return "No related party transaction data found."
 
-    # 1. Get the most recent year available in the data
-    latest_yrc = max(row.get('YRC', 0) for row in rows)
-    latest_rows = [r for r in rows if r.get('YRC') == latest_yrc]
+    # 1. Identify the most recent Fiscal Year (YRC)
+    latest_yrc = max(row.get('YRC', 0) for row in data)
+    year_label = str(int(latest_yrc))[:4]
     
-    lines = [f"### Related Party Transactions (FY {str(int(latest_yrc))[:4]}):"]
+    # 2. Extract the 'Grand Total' row for a high-level snapshot
+    # This provides the total exposure across all categories.
+    grand_total_row = next((r for r in data if r.get('NAT_TRANS') == 'Grand Total' and r.get('YRC') == latest_yrc), None)
     
-    # 2. Group significant transactions
-    # We ignore 'Grand Total' and 'Total...' rows to show the actual line items
-    # and only show rows where TOTAL > 0
-    categories = {
-        "Revenue/Income": [],
-        "Expenses": [],
-        "Assets/Investments/Loans": []
-    }
+    lines = [f"## Related Party Transactions (FY {year_label})", "---"]
 
-    for row in latest_rows:
-        name = row.get('NAT_TRANS', 'Unknown')
-        total = row.get('TOTAL', 0)
-        trans_type = row.get('TYPE', '')
-        subtype = row.get('SUBTYPE', '')
+    if grand_total_row:
+        total = grand_total_row.get('TOTAL', 0)
+        lines.append(f"### **Total Aggregate Exposure: ₹{total:,.2f} Cr**")
+        lines.append(f"*   **Associates:** ₹{grand_total_row.get('ASSOC', 0):,.2f} Cr")
+        lines.append(f"*   **Subsidiaries:** ₹{grand_total_row.get('SUBSI', 0):,.2f} Cr")
+        lines.append(f"*   **Joint Ventures:** ₹{grand_total_row.get('JV', 0):,.2f} Cr")
+        lines.append(f"*   **KMP (Management):** ₹{grand_total_row.get('KMP', 0):,.2f} Cr")
+        lines.append("\n**Key Transaction Breakdowns:**")
 
-        # Skip summary/total rows to avoid double counting in the LLM's head
-        if "Total" in name or total == 0:
-            continue
-
-        entry = (f"- **{name}**: {total} Cr "
-                 f"(Subsi: {row.get('SUBSI', 0)}, JV: {row.get('JV', 0)}, KMP: {row.get('KMP', 0)})")
-
-        if trans_type == "Profit & Loss":
-            if subtype == "Income":
-                categories["Revenue/Income"].append(entry)
-            else:
-                categories["Expenses"].append(entry)
-        elif trans_type == "Balance Sheet" or not trans_type:
-            categories["Assets/Investments/Loans"].append(entry)
-
-    # 3. Build the response
-    for cat, items in categories.items():
-        if items:
-            lines.append(f"\n**{cat}:**")
-            lines.extend(items)
-
-    final_output = "\n".join(lines)
-    
-    # Final check to ensure we aren't flooding
-    if len(final_output) > 5000:
-        return final_output[:4800] + "\n\n[... Data truncated for brevity ...]"
+    # 3. List individual transaction types (excluding total rows)
+    for row in data:
+        if row.get('YRC') != latest_yrc: continue
         
-    return final_output
+        nat_trans = row.get('NAT_TRANS', '')
+        # Skip summary rows for the detailed breakdown
+        if "Total" in nat_trans or nat_trans == "Grand Total": continue
+        
+        row_total = row.get('TOTAL', 0)
+        if row_total > 0:
+            lines.append(f"*   **{nat_trans}:** ₹{row_total:,.2f} Cr")
+
+    return "\n".join(lines)
+
+
 
 @mcp.tool(description=(
-    "Get employee count: total, male, female, contract workers. "
+    "Retrieves workforce demographics including total, male, female, and contract employees. "
+    "Useful for ESG analysis and understanding a company's labor structure. "
     "REQUIRES co_code — call resolve_nse_symbol first."
 ))
 def get_employee_count(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_employee_count")
+    if err: return err
+    
     url = EP["employee_count"].format(co_code=val)
-    data, err = _get(url, f"EmployeeCount[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
+    response_data, err = _get(url, f"EmployeeCount[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching employee data for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
         return "No employee count data found."
-    lines = ["Employee Count:"]
-    for row in rows[:5]:
-        p = _pick(row, ["yrc", "totalempoyee", "totalempoyee_male",
-                        "totalempoyee_female", "totalemployee_contractbasis"])
+    
+    lines = [f"## Workforce Demographics (Code: {val})", "---"]
+    
+    # Process the most recent records
+    for row in data[:5]:
+        # Mapping exactly to the PascalCase and spelling found in your trace
+        yrc = str(int(row.get("YRC", 0)))
+        total = row.get("TotalEmpoyee", 0)
+        male = row.get("TotalEmpoyee_Male", 0)
+        female = row.get("TotalEmpoyee_Female", 0)
+        contract = row.get("TotalEmployee_Contractbasis", 0)
+        disabled = row.get("PermenantDisabledEmployee", 0)
+        
+        # Calculate Female % for ESG context
+        female_pct = (female / total * 100) if total > 0 else 0
+        
         lines.append(
-            f"  {p.get('yrc','N/A')}"
-            f"  Total: {p.get('totalempoyee','N/A')}"
-            f"  Male: {p.get('totalempoyee_male','N/A')}"
-            f"  Female: {p.get('totalempoyee_female','N/A')}"
-            f"  Contract: {p.get('totalemployee_contractbasis','N/A')}"
-            f" permanent: {p.get('permenantdisabledemployee','NA')}"
+            f"### Fiscal Year {yrc[:4]}\n"
+            f"*   **Total Workforce:** {int(total):,}\n"
+            f"*   **Gender Split:** Male: {int(male):,} | Female: {int(female):,} ({female_pct:.1f}%)\n"
+            f"*   **Contract Workers:** {int(contract):,}\n"
+            f"*   **Differently Abled Employees:** {int(disabled):,}"
         )
+
     return "\n".join(lines)
 
-
 @mcp.tool(description=(
-    "Get capital structure history: authorised, issued, paid-up equity capital over years. "
+    "Retrieves the history of capital structure including authorized, issued, "
+    "and paid-up equity capital. Useful for tracking equity dilution or share capital changes. "
     "REQUIRES co_code — call resolve_nse_symbol first."
 ))
 def get_capital_structure(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_capital_structure")
+    if err: return err
+    
     url = EP["capital_structure"].format(co_code=val)
-    data, err = _get(url, f"CapitalStructure[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
+    response_data, err = _get(url, f"CapitalStructure[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching capital structure for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
         return "No capital structure data found."
-    lines = ["Capital Structure:"]
-    for row in rows[:6]:
-        p = _pick(row, ["YRC", "EquityAuthorised", "EquityIssued", "EquityPaidUp", "FaceValue"])
+    
+    lines = [f"## Capital Structure History (Code: {val})", "---"]
+    
+    # Analyze the last 5 years to spot changes in share capital
+    for row in data[:5]:
+        yrc = str(int(row.get("YRC", 0)))
+        auth = row.get("EquityAuthorised", 0.0)
+        paid_up = row.get("EquityPaidUp", 0.0)
+        fv = row.get("FaceValue", 0.0)
+        shares = row.get("EquitySharesPaidUp", 0.0)
+        
         lines.append(
-            f"  {p.get('YRC','N/A')}"
-            f"  Auth: {p.get('EquityAuthorised','N/A')} Cr"
-            f"  Issued: {p.get('EquityIssued','N/A')} Cr"
-            f"  Paid-up: {p.get('EquityPaidUp','N/A')} Cr"
-            f"  FV: {p.get('FaceValue','N/A')}"
+            f"### FY {yrc[:4]}\n"
+            f"*   **Authorised Capital:** ₹{auth:,.2f} Cr\n"
+            f"*   **Paid-up Capital:** ₹{paid_up:,.2f} Cr\n"
+            f"*   **Total Shares:** {int(shares):,}\n"
+            f"*   **Face Value:** ₹{fv}"
         )
+
     return "\n".join(lines)
 
 
 @mcp.tool(description=(
-    "Get promoter pledge share details: pledged quantity and % of total holding. "
+    "Retrieves details of shares pledged by promoters. "
+    "Crucial for identifying governance risks and potential liquidity stress within the promoter group. "
     "REQUIRES co_code — call resolve_nse_symbol first."
 ))
 def get_pledge_share_details(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_pledge_share_details")
+    if err: return err
+    
     url = EP["pledge_shares"].format(co_code=val)
-    data, err = _get(url, f"PledgeShares[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No pledge share data found."
-    lines = ["Pledge Shares:"]
-    for row in rows[:8]:
-        p = _pick(row, ["date", "type", "name", "totalpledgeshares", "perc_totalsharesheld"])
-        lines.append(
-            f"  {str(p.get('date',''))[:10]}"
-            f"  {p.get('type',''):<15}"
-            f"  {p.get('name','N/A')}"
-            f"  Pledged: {p.get('totalpledgeshares','N/A')}"
-            f"  ({p.get('perc_totalsharesheld','N/A')}%)"
-        )
+    response_data, err = _get(url, f"PledgeShares[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching pledge details for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No pledge share records found."
+    
+    # 1. Identify the latest filing date
+    filing_date = str(data[0].get("date", ""))[:10]
+    lines = [f"## Promoter Pledge Details (As of {filing_date})", "---"]
+    
+    # 2. Process records, focusing on those with actual pledges first
+    pledged_entities = [r for r in data if r.get("TotalPledgeShares", 0) > 0]
+    unpledged_entities = [r for r in data if r.get("TotalPledgeShares", 0) == 0]
+
+    if not pledged_entities:
+        lines.append("✅ **No shares are currently pledged by the Promoter Group.**")
+        lines.append("\n**Major Promoter Holdings:**")
+        # Show top unpledged holders for context
+        for row in unpledged_entities[:5]:
+            lines.append(f"*   **{row.get('name', 'N/A')}**: 0.00% Pledged")
+    else:
+        lines.append("⚠️ **Promoter Pledging Detected:**")
+        for row in pledged_entities:
+            name = row.get("name", "N/A")
+            qty = row.get("TotalPledgeShares", 0)
+            perc = row.get("Perc_TotalSharesHeld", 0.0)
+            lines.append(f"*   **{name}**\n    * Pledged Qty: {int(qty):,}\n    * % of their holding: **{perc:.2f}%**")
+
     return "\n".join(lines)
 
 
 @mcp.tool(description=(
-    "Get chronological equity history: equity changes and remarks by year. "
+    "Retrieves the chronological history of equity changes, including specific remarks for each issuance. "
+    "Use this to track ESOPs, Rights Issues, Bonus Issues, and historical capital changes. "
     "REQUIRES co_code — call resolve_nse_symbol first."
 ))
 def get_chronological_history(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_chronological_history")
+    if err: return err
+    
     url = EP["chrono_history"].format(co_code=val)
-    data, err = _get(url, f"ChronoHistory[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No chronological history found."
-    lines = ["Chronological Equity History:"]
-    for row in rows[:10]:
-        p = _pick(row, ["yrc", "eqtyason", "eqty", "remarks"])
+    response_data, err = _get(url, f"ChronoHistory[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching chronological history for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No chronological equity history found."
+    
+    company_name = data[0].get("LNAME", "N/A")
+    lines = [f"## Equity Capital History: {company_name}", "---"]
+    
+    # Analyze the most recent 10 changes
+    for row in data[:10]:
+        # Format the date and equity figures based on trace keys
+        date_raw = str(row.get("EQTYASON", "N/A")).strip()
+        equity_val = row.get("EQTY", 0.0)
+        remarks = row.get("REMARKS", "Capital Change")
+        
         lines.append(
-            f"  {p.get('yrc','N/A')}"
-            f"  Equity: {p.get('eqty','N/A')} Cr"
-            f"  | {p.get('remarks','')}"
+            f"*   **{date_raw}**\n"
+            f"    * Equity Capital: ₹{equity_val:,.2f} Cr\n"
+            f"    * Event: *{remarks}*"
         )
+
     return "\n".join(lines)
+
 
 import re
 
 @mcp.tool(description=(
-    "Get the historical background and key milestones of a company. "
-    "Note: For large companies, this returns a summarized version to prevent context flooding."
+    "Retrieves the historical background and key corporate milestones of a company. "
+    "Use this to understand a company's origins, major mergers, and evolution over time. "
+    "REQUIRES co_code — call resolve_nse_symbol first."
 ))
 def get_company_history(co_code: int) -> str:
-    # Validate and ensure integer co_code
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
-        
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_company_history")
+    if err: return err
+    
     url = EP["company_history"].format(co_code=val)
-    data, err = _get(url, f"CompanyHistory[{val}]")
+    response_data, err = _get(url, f"CompanyHistory[{val}]")
     
-    if err:
-        return err
-    
-    rows = _rows(data)
-    if not rows or 'memo' not in rows[0]:
-        return "No historical data found for this company."
+    if err or not response_data.get("success"):
+        return f"Error fetching history for code {val}."
         
-    # Extract keys based on the provided documentation image
-    full_memo = rows[0].get('memo', "").strip()
-    company_name = rows[0].get('lname', 'the company')
+    data = response_data.get("data", [])
+    if not data or not data[0].get('MEMO'):
+        return "No historical records found for this company."
+        
+    # Mapping using PascalCase keys found in your trace
+    full_memo = data[0].get('MEMO', "").strip()
+    company_name = data[0].get('LNAME', 'the company')
 
-    if not full_memo:
-        return f"Historical records for {company_name} are currently empty."
-
-    # --- INDUSTRIAL GRADE SUMMARY LOGIC ---
+    # --- INTELLIGENT HISTORY SUMMARY ---
+    # The memo is often a long string with \r\n separators.
+    # We want to provide the 'Origin' and the 'Most Recent' updates.
     
-    # 1. Capture the Overview (First paragraph)
     paragraphs = [p.strip() for p in full_memo.split('\r\n') if p.strip()]
-    overview = paragraphs[0] if paragraphs else ""
+    if not paragraphs:
+        return f"Historical records for {company_name} are currently unavailable."
 
-    # 2. Extract Year-based Milestones using Regex 
-    # (Captures 'In 2024...', 'During FY2023...', etc.)
-    milestone_pattern = r'(?:In|During|On)\s+(?:the\s+)?(?:year\s+)?(?:FY|fiscal\s+)?\d{4}[^.]*\.'
+    # 1. The Foundation (First 2 paragraphs)
+    foundation = "\n\n".join(paragraphs[:2])
+
+    # 2. Key Milestones (Finding the most recent dated entries)
+    import re
+    milestone_pattern = r'(?:In|During|On)\s+(?:the\s+)?(?:year\s+)?\d{4}[^.]*\.'
     all_milestones = re.findall(milestone_pattern, full_memo)
-
-    # 3. Build the LLM-friendly response
-    response_parts = [f"### Company Overview: {company_name}", overview]
+    
+    lines = [
+        f"## Company History: {company_name}",
+        "---",
+        "### Foundation & Core Business",
+        foundation,
+        ""
+    ]
     
     if all_milestones:
-        response_parts.append("\n### Key Historical Milestones (Recent):")
-        # Take the last 10 milestones to focus on current relevance
-        recent_milestones = all_milestones[-10:]
-        for m in recent_milestones:
-            response_parts.append(f"- {m}")
-    
-    final_output = "\n".join(response_parts)
+        lines.append("### Key Historical Milestones")
+        # Take the first 3 (Foundational) and last 5 (Recent) milestones
+        # to give a balanced historical view without flooding the context.
+        selected_milestones = all_milestones[:3] + ["..."] + all_milestones[-5:]
+        for m in selected_milestones:
+            if m == "...":
+                lines.append(m)
+            else:
+                lines.append(f"* {m}")
 
-    # Final token safeguard: limit to ~4000 characters
-    if len(final_output) > 4000:
-        return final_output[:3800] + "\n\n[... Remaining history truncated for efficiency ...]"
-        
-    return final_output
+    final_output = "\n".join(lines)
+    return final_output if len(final_output) < 4000 else final_output[:3800] + "\n\n[... Truncated for brevity ...]"
+
 
 
 @mcp.tool(description=(
-    "Get substantial acquisition / insider trading disclosures. "
+    "Retrieves substantial acquisition and insider trading disclosures (SAST). "
+    "Use this to track major share releases, market purchases by promoters, or institutional exits. "
     "REQUIRES co_code — call resolve_nse_symbol first."
 ))
 def get_substantial_acquisitions(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_substantial_acquisitions")
+    if err: return err
+    
     url = EP["substantial_acq"].format(co_code=val)
-    data, err = _get(url, f"SubstantialAcq[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No substantial acquisition data found."
-    lines = ["Substantial Acquisitions / Insider Trades:"]
-    for i, row in enumerate(rows[:10], 1):
-        p = _pick(row, ["NameofAcquirer_Seller", "Acq_Sale", "TransactedQuantity",
-                        "TransactedQuantity_PerChange", "TransactionPeriod"])
+    response_data, err = _get(url, f"SubstantialAcq[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching acquisition data for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No substantial acquisition or insider trading records found."
+    
+    lines = [f"## Substantial Acquisitions & Insider Trades (Code: {val})", "---"]
+    
+    # Analyze the most recent 10 disclosures
+    for row in data[:10]:
+        entity = row.get("NameofAcquirer_Seller", "Unknown Party")
+        # Mode provides context like 'Release of Shares' or 'Market Purchase'
+        mode = row.get("ModeofBuy_Sale") or "Transaction"
+        date = row.get("TransactionPeriod") or "N/A"
+        qty = row.get("TransactedQuantity", "0")
+        perc = row.get("TransactedQuantity_PerChange", "0")
+        is_promoter = "Promoter" if row.get("Promoter_PromoterGroup") == "Yes" else "Non-Promoter"
+        
         lines.append(
-            f"  {i:>3}. {p.get('NameofAcquirer_Seller','N/A')}"
-            f"  [{p.get('Acq_Sale','N/A')}]"
-            f"  Qty: {p.get('TransactedQuantity','N/A')}"
-            f"  ({p.get('TransactedQuantity_PerChange','N/A')}%)"
-            f"  on {str(p.get('TransactionPeriod',''))[:10]}"
+            f"*   **{entity}** ({is_promoter})\n"
+            f"    *   **Action:** {mode}\n"
+            f"    *   **Quantity:** {qty} shares ({perc}% change)\n"
+            f"    *   **Date:** {date}"
         )
+
     return "\n".join(lines)
 
 
 @mcp.tool(description=(
-    "Get segment-wise revenue and EBIT (geography or product breakdown). "
-    "segment_type: 'geography' (default) or 'product'. "
-    "REQUIRES co_code. report_type: 's' or 'c'."
+    "Retrieves segment-wise revenue and EBIT based on Geography or Product breakdown. "
+    "Use this to analyze a company's business mix and geographical exposure. "
+    "segment_type: 'geography' or 'product'. REQUIRES co_code."
 ))
 def get_segment_data(co_code: int, segment_type: str = "geography", report_type: str = "s") -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    """
+    Args:
+        co_code: CMOTS Company Code.
+        segment_type: 'geography' or 'product'.
+        report_type: 's' (Standalone) or 'c' (Consolidated).
+    """
+    val, err = _require_int(co_code, "co_code", "get_segment_data")
+    if err: return err
+    
     t = report_type.lower()
-    ep = "segment_geography" if segment_type.lower() == "geography" else "segment_product"
-    url = EP[ep].format(co_code=val, report_type=t)
-    data, err = _get(url, f"Segment[{val}/{segment_type}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
+    ep_key = "segment_geography" if segment_type.lower() == "geography" else "segment_product"
+    url = EP[ep_key].format(co_code=val, report_type=t)
+    
+    response_data, err = _get(url, f"Segment[{val}/{segment_type}]")
+    if err or not response_data.get("success"):
+        return f"Error fetching segment data for code {val}."
+
+    data = response_data.get("data", [])
+    if not data:
         return "No segment data found."
-    lines = [f"Segment Data ({segment_type.title()}-wise):"]
-    for row in rows[:10]:
-        p = _pick(row, ["SegmentName", "yrc", "RevenuefromOperations",
-                        "ProfitLossBeforeInterestTax", "SegmentAssets"])
-        lines.append(
-            f"  [{p.get('yrc','N/A')}] {p.get('SegmentName','N/A')}"
-            f"  Rev: {p.get('RevenuefromOperations','N/A')} Cr"
-            f"  EBIT: {p.get('ProfitLossBeforeInterestTax','N/A')} Cr"
-        )
+
+    # Group data by Fiscal Year (YRC) to show the mix per year
+    from collections import defaultdict
+    yearly_segments = defaultdict(list)
+    for row in data:
+        yrc = str(int(row.get("yrc", 0)))
+        yearly_segments[yrc].append(row)
+
+    lines = [f"## Segment Analysis ({segment_type.title()}-wise)", "---"]
+    
+    # Process only the 2 most recent years to keep output concise
+    sorted_years = sorted(yearly_segments.keys(), reverse=True)[:2]
+    
+    for yrc in sorted_years:
+        lines.append(f"### Fiscal Year {yrc[:4]}")
+        for row in yearly_segments[yrc]:
+            name = row.get("SegmentName", "Other")
+            rev = row.get("RevenuefromOperations", 0.0)
+            ebit = row.get("ProfitLossBeforeInterestTax", 0.0)
+            assets = row.get("SegmentAssets", 0.0)
+            
+            lines.append(
+                f"*   **{name}:**\n"
+                f"    * Revenue: ₹{rev:,.2f} Cr\n"
+                f"    * EBIT (Profit): ₹{ebit:,.2f} Cr\n"
+                f"    * Assets Deployed: ₹{assets:,.2f} Cr"
+            )
+        lines.append("")
+
     return "\n".join(lines)
 
 
 @mcp.tool(description=(
-    "Get R&D expenditure: capital and recurring R&D spend by year. "
+    "Retrieves a company's Research & Development (R&D) spending, split by capital and recurring expenditure. "
+    "Use this to evaluate innovation investment and long-term competitiveness. "
     "REQUIRES co_code — call resolve_nse_symbol first."
 ))
 def get_r_and_d_expenditure(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_r_and_d_expenditure")
+    if err: return err
+    
     url = EP["r_and_d"].format(co_code=val)
-    data, err = _get(url, f"R&D[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
+    response_data, err = _get(url, f"R&D[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching R&D data for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
         return "No R&D expenditure data found."
-    lines = ["R&D Expenditure:"]
-    for row in rows[:6]:
-        p = _pick(row, ["yrc", "capital", "recurring", "percentage"])
+    
+    lines = [f"## R&D Expenditure History (Code: {val})", "---"]
+    
+    # Process the most recent 5 years of R&D data
+    for row in data[:5]:
+        yrc_raw = str(int(row.get("YRC", 0)))
+        year = yrc_raw[:4]
+        
+        # Mapping to UPPERCASE keys found in the trace
+        cap = row.get("CAPITAL", 0.0)
+        rec = row.get("RECURRING", 0.0)
+        perc = row.get("PERCENTAGE", 0.0)
+        
+        total = cap + rec
+        
         lines.append(
-            f"  {p.get('yrc','N/A')}"
-            f"  Capital: {p.get('capital','N/A')} Cr"
-            f"  Recurring: {p.get('recurring','N/A')} Cr"
-            f"  % of Sales: {p.get('percentage','N/A')}%"
+            f"### FY {year}\n"
+            f"*   **Total R&D Spend:** ₹{total:,.2f} Cr\n"
+            f"    *   *Recurring (Opex):* ₹{rec:,.2f} Cr\n"
+            f"    *   *Capital (Capex):* ₹{cap:,.2f} Cr\n"
+            f"*   **R&D as % of Turnover:** {perc:.2f}%"
         )
+
     return "\n".join(lines)
 
-
 @mcp.tool(description=(
-    "Get finished products / key product list for a manufacturing company. "
+    "Retrieves the list of finished products, including installed capacity, production volumes, and sales quantities. "
+    "Essential for assessing manufacturing utilization and product mix. "
     "REQUIRES co_code — call resolve_nse_symbol first."
 ))
 def get_finished_products(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_finished_products")
+    if err: return err
+    
     url = EP["finished_products"].format(co_code=val)
-    data, err = _get(url, f"FinishedProducts[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
+    response_data, err = _get(url, f"FinishedProducts[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching product data for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
         return "No finished product data found."
     
-    lines = ["Finished Products:"]
-    for i, row in enumerate(rows[:15], 1):
-        # Mapped keys based on the provided image schema
-        p = _pick(row, [
-            "prname",   # Product Name
-            "uom",      # Unit of Measurement
-            "inst",     # Installed Capacity
-            "prodn",    # Production
-            "saleqty",  # Sales Quantity
-            "saleval"   # Sales Value
-        ])
+    # Group by Year to show the most recent operational metrics
+    latest_yrc = max(row.get("YRC", 0) for row in data)
+    year_label = str(int(latest_yrc))[:4]
+    
+    lines = [f"## Finished Products & Operational Capacity (FY {year_label})", "---"]
+    
+    # Filter rows for the latest year and ignore those with zero sales/capacity to reduce noise
+    for i, row in enumerate(data):
+        if row.get("YRC") != latest_yrc: continue
         
-        lines.append(
-            f"  {i:>3}. {p.get('prname','N/A')}"
-            f"  ({p.get('uom','')})"
-            f"  Capacity: {p.get('inst','N/A')}"
-            f"  Production: {p.get('prodn','N/A')}"
-            f"  Sales Qty: {p.get('saleqty','N/A')}"
-        )
+        name = row.get("PRNAME", "N/A")
+        uom = row.get("UOM", "Units")
+        inst = row.get("INST", 0.0)
+        prod = row.get("PRODN", 0.0)
+        sale_qty = row.get("SALEQTY", 0.0)
+        sale_val = row.get("SALEVAL", 0.0)
+        perc_sale = row.get("PER_SALE", 0.0)
+
+        # Logic: Show row if it has significant revenue contribution OR actual capacity listed
+        if sale_val > 0 or inst > 0 or sale_qty > 0:
+            lines.append(f"### {name}")
+            if sale_val > 0:
+                lines.append(f"*   **Revenue Contribution:** ₹{sale_val:,.2f} Cr ({perc_sale}%)")
+            if inst > 0:
+                lines.append(f"*   **Installed Capacity:** {int(inst):,} {uom}")
+            if sale_qty > 0:
+                lines.append(f"*   **Sales Volume:** {int(sale_qty):,} {uom}")
+            if prod > 0:
+                lines.append(f"*   **Actual Production:** {int(prod):,} {uom}")
+            lines.append("")
+
     return "\n".join(lines)
 
 
+
 @mcp.tool(description=(
-    "Get raw materials consumption data. "
+    "Retrieves raw material consumption data, including specific material costs and quantities. "
+    "Essential for analyzing input cost pressures and supply chain dependencies. "
     "REQUIRES co_code — call resolve_nse_symbol first."
 ))
 def get_raw_materials(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
-    url = EP["raw_materials"].format(co_code=val)
-    data, err = _get(url, f"RawMaterials[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No raw material data found."
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "get_raw_materials")
+    if err: return err
     
-    lines = ["Raw Materials:"]
-    for i, row in enumerate(rows[:15], 1):
-        # Mapped keys based on the provided image schema
-        p = _pick(row, [
-            "prname",  # Raw material name
-            "uom",     # Unit of measurement
-            "qty",     # Consumption quantity
-            "value"    # Value in Cr
-        ])
+    url = EP["raw_materials"].format(co_code=val)
+    response_data, err = _get(url, f"RawMaterials[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching raw material data for code {val}."
         
-        lines.append(
-            f"  {i:>3}. {p.get('prname','N/A')}"
-            f"  ({p.get('uom','')})"
-            f"  Consumption: {p.get('qty','N/A')}"
-            f"  Value: {p.get('value','N/A')} Cr"
-        )
+    data = response_data.get("data", [])
+    if not data:
+        return "No raw material consumption records found."
+    
+    # Identify the latest year available
+    latest_yrc = max(row.get("YRC", 0) for row in data)
+    year_label = str(int(latest_yrc))[:4]
+    
+    lines = [f"## Raw Material Consumption (FY {year_label})", "---"]
+    
+    # Filter for significant line items in the latest year
+    for row in data:
+        if row.get("YRC") != latest_yrc: continue
+        
+        name = row.get("PRNAME", "N/A")
+        val_cr = row.get("VALUE", 0.0)
+        qty = row.get("QTY", 0.0)
+        uom = row.get("UOM", "Units")
+
+        # Display if there is a recorded cost
+        if val_cr > 0:
+            qty_str = f" ({int(qty):,} {uom})" if qty > 0 else ""
+            lines.append(f"*   **{name}:** ₹{val_cr:,.2f} Cr{qty_str}")
+
     return "\n".join(lines)
 
 
@@ -4446,582 +4680,587 @@ def get_forthcoming_ipos(exchange: str = "NSE", count: int = 10) -> str:
         )
     return "\n".join(lines)
 
-@mcp.tool(description="Get IPOs currently open for subscription. exchange: 'NSE' or 'BSE'.")
+
+@mcp.tool(description=(
+    "Retrieves IPOs currently open for subscription. "
+    "Includes live price bands, minimum investment requirements, and closing dates. "
+    "Use this for users looking to invest in active issues. exchange: 'NSE' or 'BSE'."
+))
 def get_open_ipos(exchange: str = "NSE", count: int = 10) -> str:
+    """
+    Args:
+        exchange: 'NSE' or 'BSE'.
+        count: Number of open IPOs to retrieve.
+    """
     try:
         ex = _normalise_exchange(exchange)
     except ValueError as e:
         return str(e)
+        
+    # Endpoint from your trace: OpenIssues/{exchange}/-/10
     url = EP["open_ipo"].format(ex=ex, n=count)
-    data, err = _get(url, f"OpenIPO[{ex}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No currently open IPOs."
+    response_data, err = _get(url, f"OpenIPO[{ex}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching open IPOs for {ex}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return f"There are currently no open IPOs for subscription on the {ex}."
 
-    lines = [f"Open IPOs — {ex} ({len(rows)}):"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "Lname",             # company name
-            "IssueType",         # IPO / SME
-            "ISSUEPRICE",        # upper price band
-            "ISSUEPRI2",         # lower price band
-            "OPENDATE",          # subscription open
-            "CLOSDATE",          # subscription close
-            "LISTDATE",          # expected listing date
-            "BBCLOSDATE",        # anchor investor close (if applicable)
-            "MinQty",            # minimum lot quantity
-            "mininvestment",     # minimum investment amount
-            "IssueSize",         # issue size (₹ cr)
-            "Nsesymbol",         # NSE ticker
-            "Bsesymbol",         # BSE ticker
-        ])
-
-        # price band string
-        lo = p.get("ISSUEPRI2") or ""
-        hi = p.get("ISSUEPRICE") or ""
+    lines = [f"## 🔥 Open IPOs — {ex}", "---"]
+    
+    for i, row in enumerate(data[:count], 1):
+        # Normalizing keys based on the mixed-case trace provided
+        name = row.get("lname", "N/A")
+        issue_type = row.get("ISSUETYPE", "IPO")
+        symbol = row.get("Nsesymbol") or row.get("Bsesymbol") or "TBA"
+        
+        # Price Band (Note: trace shows ISSUEPRICE as lower and ISSUEPRI2 as upper)
+        lo = row.get("ISSUEPRICE")
+        hi = row.get("ISSUEPRI2")
         if lo and hi and lo != hi:
             price_str = f"₹{lo} – ₹{hi}"
-        elif hi:
-            price_str = f"₹{hi}"
-        else:
-            price_str = "N/A"
-
-        symbol = p.get("Nsesymbol") or p.get("Bsesymbol") or "N/A"
-
-        lines.append(
-            f"\n  {i:>2}. {p.get('Lname', 'N/A')}  [{p.get('IssueType', '')}]  ({symbol})"
-            f"\n      Price Band : {price_str}"
-            f"\n      Open: {str(p.get('OPENDATE', ''))[:10]}  "
-            f"Close: {str(p.get('CLOSDATE', ''))[:10]}  "
-            f"List: {str(p.get('LISTDATE', ''))[:10]}"
-            f"\n      Min Qty: {p.get('MinQty', 'N/A')}  "
-            f"Min Investment: ₹{p.get('mininvestment', 'N/A')}  "
-            f"Issue Size: {p.get('IssueSize', 'N/A')}"
-        )
-    return "\n".join(lines)
-
-
-@mcp.tool(description="Get recently closed IPOs (bidding ended). exchange: 'NSE' or 'BSE'.")
-def get_closed_ipos(exchange: str = "NSE", count: int = 10) -> str:
-    try:
-        ex = _normalise_exchange(exchange)
-    except ValueError as e:
-        return str(e)
-    url = EP["closed_ipo"].format(ex=ex, n=count)
-    data, err = _get(url, f"ClosedIPO[{ex}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No recently closed IPOs."
-
-    lines = [f"Closed IPOs — {ex} ({len(rows)}):"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "lname",          # company name
-            "issuetype",      # IPO / SME
-            "opendate",       # bidding open
-            "closdate",       # bidding close
-            "listdate",       # listing date
-            "issueprice",     # upper price band / final price
-            "listprice",      # listing price
-            "allotmentprice", # allotment price
-            "issuesize",      # issue size
-            "Nsesymbol",      # NSE ticker
-            "Bsesymbol",      # BSE ticker
-        ])
-
-        # listing gain/loss if both prices available
-        gain_str = ""
-        try:
-            lp = float(p.get("listprice") or 0)
-            ip = float(p.get("issueprice") or 0)
-            if lp and ip:
-                gain = ((lp - ip) / ip) * 100
-                sign = "+" if gain >= 0 else ""
-                gain_str = f"  Gain: {sign}{gain:.1f}%"
-        except (TypeError, ValueError):
-            pass
-
-        symbol = p.get("Nsesymbol") or p.get("Bsesymbol") or "N/A"
-        lines.append(
-            f"\n  {i:>2}. {p.get('lname', 'N/A')}  [{p.get('issuetype','')}]  ({symbol})"
-            f"\n      Open: {str(p.get('opendate',''))[:10]}  "
-            f"Close: {str(p.get('closdate',''))[:10]}  "
-            f"List: {str(p.get('listdate',''))[:10]}"
-            f"\n      Issue Price: {p.get('issueprice','N/A')}  "
-            f"List Price: {p.get('listprice','N/A')}  "
-            f"Allotment: {p.get('allotmentprice','N/A')}"
-            f"{gain_str}"
-            f"\n      Issue Size: {p.get('issuesize','N/A')}"
-        )
-    return "\n".join(lines)
-
-
-@mcp.tool(description="Get recently listed IPOs with listing price, offer price, and performance. exchange: 'NSE' or 'BSE'. type: 'SME' or 'IPO'.")
-def get_new_ipo_listings(exchange: str = "NSE", count: int = 10, type: str = "IPO") -> str:
-    try:
-        ex = _normalise_exchange(exchange)
-    except ValueError as e:
-        return str(e)
-    url = EP["new_listing"].format(ex=ex, n=count)
-    data, err = _get(url, f"NewListing[{ex}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No recent IPO listings found."
-    lines = [f"New IPO Listings — {ex} ({len(rows)}):"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "co_name",
-            "lname",
-            "listdate",
-            "listprice",
-            "listvol",
-            "offerprice",
-            "IssuePrice",
-            "issuesize",
-            "high",
-            "low",
-            "close",
-            "perchange",
-            "volume",
-            "lasttr_date",
-            "type",
-        ])
-        # Listing gain = ((listprice - offerprice) / offerprice) * 100
-        try:
-            lp = float(p.get("listprice") or 0)
-            op = float(p.get("offerprice") or p.get("IssuePrice") or 0)
-            listing_gain = round(((lp - op) / op) * 100, 2) if op else "N/A"
-        except (TypeError, ZeroDivisionError):
-            listing_gain = "N/A"
-
-        company = p.get("co_name") or p.get("lname") or "N/A"
-        lines.append(
-            f"  {i:>3}. {company}"
-            f"  |  Type: {p.get('type', 'N/A')}"
-            f"  |  Listed: {str(p.get('listdate', ''))[:10]}"
-            f"  |  Offer Price: {p.get('offerprice') or p.get('IssuePrice', 'N/A')}"
-            f"  |  List Price: {p.get('listprice', 'N/A')}"
-            f"  |  Listing Gain: {listing_gain}%"
-            f"  |  Close: {p.get('close', 'N/A')}"
-            f"  |  % Change: {p.get('perchange', 'N/A')}%"
-            f"  |  Issue Size: {p.get('issuesize', 'N/A')}"
-            f"  |  Last Traded: {str(p.get('lasttr_date', ''))[:10]}"
-        )
-    return "\n".join(lines)
-
-
-@mcp.tool(description="Get top-performing IPOs ranked by listing gains. Returns company name, "
-        "offer price, listing price, close price, listing gain %, percent change, "
-        "and list date. Use for: best IPO performers, IPO listing gains, "
-        "top IPOs, IPO returns, BSE/NSE IPO performance.")
-def get_best_ipo_performers(exchange: str = "NSE", count: int = 10) -> str:
-    try:
-        ex = _normalise_exchange(exchange)
-    except ValueError as e:
-        return str(e)
-    url = EP["best_ipo"].format(ex=ex, n=count)
-    data, err = _get(url, f"BestIPO[{ex}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No IPO performer data found."
-    lines = [f"Best IPO Performers — {ex}:"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "co_name",
-            "offerprice",
-            "listprice",
-            "close",
-            "pricediff",
-            "perchange",
-            "per_gain_listing",
-            "listdate",
-            "isin",
-        ])
-        lines.append(
-            f"  {i:>3}. {p.get('co_name', 'N/A')}"
-            f"  |  Offer Price: {p.get('offerprice', 'N/A')}"
-            f"  |  List Price: {p.get('listprice', 'N/A')}"
-            f"  |  Close: {p.get('close', 'N/A')}"
-            f"  |  Listing Gain: {p.get('per_gain_listing', 'N/A')}%"
-            f"  |  % Change: {p.get('perchange', 'N/A')}%"
-            f"  |  Price Diff: {p.get('pricediff', 'N/A')}"
-            f"  |  Listed: {p.get('listdate', 'N/A')}"
-        )
-    return "\n".join(lines)
-
-
-@mcp.tool(description=(
-    "Get detailed IPO info: price band, lot size, issue size, listing date. "
-    "REQUIRES co_code from resolve_nse_symbol"
-))
-def get_ipo_details(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_forthcoming_ipos / get_open_ipos")
-    if err:
-        return err
-    url = EP["ipo_details"].format(co_code=val)
-    data, err = _get(url, f"IPODetails[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No IPO detail data found."
-    r = rows[0]
-    p = _pick(r, [
-        "companyname",
-        "sectorname",
-        "ipostartdate",
-        "ippenddate",
-        "listdate",
-        "facevalue",
-        "priceband1",
-        "priceband2",
-        "lotsize",
-        "listingat",
-        "employeediscount",
-        "minlot",
-        "mininvestment",
-        "maxlot",
-        "maxinvestment",
-        "totalissuesize",
-        "freshissue",
-        "Offerforsale",
-        "retaildiscount",
-        "issuetype",
-    ])
-    lines = ["IPO Details:"]
-    for k, v in p.items():
-        lines.append(f"  {k:<25}: {v}")
-    return "\n".join(lines)
-
-
-
-
-@mcp.tool(description=(
-    "Get IPO subscription status: QIB, NII, Retail subscription times. "
-    "REQUIRES co_code from resolve_nse_symbol"
-))
-def get_ipo_subscription_status(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
-    url = EP["subscription_status"].format(co_code=val)
-    data, err = _get(url, f"SubscriptionStatus[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No subscription data found."
-    r = rows[0]
-
-    p = _pick(r, [
-        "co_code",
-        "companyname",
-        "QualifiedInstitutionalBuyers_QIB_Shareoffered",
-        "QualifiedInstitutionalBuyers_QIB_ShareBid",
-        "QualifiedInstitutionalBuyers_QIB_Subscribed",
-        "NonInstitutionalInvestors_NII_Shareoffered",
-        "NonInstitutionalInvestors_NII_ShareBid",
-        "NonInstitutionalInvestors_NII_Subscribed",
-        "RetailIndividualInvestors_RII_Shareoffered",
-        "RetailIndividualInvestors_RII_ShareBid",
-        "RetailIndividualInvestors_RII_Subscribed",
-        "ReservationPortionShareholder_ExistingRetailShareholders_Shareoffered",
-        "ReservationPortionShareholder_ExistingRetailShareholders_ShareBid",
-        "ReservationPortionShareholder_ExistingRetailShareholders_Subscribed",
-        "EmployeeReservation_Shareoffered",
-        "EmployeeReservation_ShareBid",
-        "EmployeeReservation_Subscribed",
-        "GroupCompanyReservation_Shareoffered",
-        "GroupCompanyReservation_ShareBid",
-        "GroupCompanyReservation_Subscribed",
-        "Total_Shareoffered",
-        "Total_ShareBid",
-        "Total_Subscribed",
-    ])
-
-    def fmt_row(label, offered_key, bid_key, subscribed_key):
-        offered   = p.get(offered_key)
-        bid       = p.get(bid_key)
-        subscribed = p.get(subscribed_key)
-        if not offered or str(offered) in ("", "0"):
-            return None  # tranche not used in this IPO
-        times_str = f"{subscribed}x" if subscribed not in (None, "") else "N/A"
-        return f"  {label:<44}: {times_str}  (offered {offered}, bid {bid})"
-
-    categories = [
-        ("QIB",
-         "QualifiedInstitutionalBuyers_QIB_Shareoffered",
-         "QualifiedInstitutionalBuyers_QIB_ShareBid",
-         "QualifiedInstitutionalBuyers_QIB_Subscribed"),
-        ("NII / HNI",
-         "NonInstitutionalInvestors_NII_Shareoffered",
-         "NonInstitutionalInvestors_NII_ShareBid",
-         "NonInstitutionalInvestors_NII_Subscribed"),
-        ("Retail (RII)",
-         "RetailIndividualInvestors_RII_Shareoffered",
-         "RetailIndividualInvestors_RII_ShareBid",
-         "RetailIndividualInvestors_RII_Subscribed"),
-        ("Reservation (Existing Retail)",
-         "ReservationPortionShareholder_ExistingRetailShareholders_Shareoffered",
-         "ReservationPortionShareholder_ExistingRetailShareholders_ShareBid",
-         "ReservationPortionShareholder_ExistingRetailShareholders_Subscribed"),
-        ("Employee Reservation",
-         "EmployeeReservation_Shareoffered",
-         "EmployeeReservation_ShareBid",
-         "EmployeeReservation_Subscribed"),
-        ("Group Company Reservation",
-         "GroupCompanyReservation_Shareoffered",
-         "GroupCompanyReservation_ShareBid",
-         "GroupCompanyReservation_Subscribed"),
-    ]
-
-    lines = [f"IPO Subscription Status — {p.get('companyname', 'N/A')}", "-" * 70]
-    for label, o, b, s in categories:
-        row = fmt_row(label, o, b, s)
-        if row:
-            lines.append(row)
-
-    lines.append("-" * 70)
-    lines.append(
-        f"  {'TOTAL':<44}: {p.get('Total_Subscribed', 'N/A')}x  "
-        f"(offered {p.get('Total_Shareoffered', 'N/A')}, "
-        f"bid {p.get('Total_ShareBid', 'N/A')})"
-    )
-    return "\n".join(lines)
-
-@mcp.tool(description="Get forthcoming DRHP (Draft Red Herring Prospectus) filings. exchange: 'NSE' or 'BSE'.")
-def get_forthcoming_drh_filings(exchange: str = "NSE", count: int = 10) -> str:
-    try:
-        ex = _normalise_exchange(exchange)
-    except ValueError as e:
-        return str(e)
-    url = EP["forthcoming_drh"].format(ex=ex, n=count)
-    data, err = _get(url, f"ForthcomingDRH[{ex}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No forthcoming DRHP filings found."
-
-    lines = [f"Forthcoming DRHP Filings — {ex} ({len(rows)}):"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "LNAME",           # company name
-            "IssueType",       # IPO / SME
-            "SebiFiledDate",   # when DRHP was filed with SEBI — key date
-            "OPENDATE",        # expected subscription open (may be blank)
-            "CLOSDATE",        # expected subscription close (may be blank)
-            "ISSUEPRICE",      # upper price band (often TBA at DRHP stage)
-            "ISSUEPRI2",       # lower price band
-            "IssueSize",       # issue size (₹ cr)
-            "Lotsize",         # lot size
-        ])
-
-        # price band — often TBA at DRHP stage
-        lo = p.get("ISSUEPRI2") or ""
-        hi = p.get("ISSUEPRICE") or ""
-        if lo and hi and lo != hi:
-            price_str = f"₹{lo} – ₹{hi}"
-        elif hi:
-            price_str = f"₹{hi}"
+        elif hi or lo:
+            price_str = f"₹{hi or lo}"
         else:
             price_str = "TBA"
 
-        open_str  = str(p.get("OPENDATE",  "") or "")[:10] or "TBA"
-        close_str = str(p.get("CLOSDATE",  "") or "")[:10] or "TBA"
+        # Subscription Window
+        open_dt = str(row.get("OPENDATE", ""))[:10]
+        close_dt = str(row.get("CLOSDATE", ""))[:10]
+        list_dt = str(row.get("LISTDATE", ""))[:10]
+        
+        # Size and Investment
+        size = row.get("IssueSize", "TBA")
+        min_inv = row.get("mininvestment", "TBA")
+        min_qty = row.get("MinQty", "TBA")
 
         lines.append(
-            f"\n  {i:>2}. {p.get('LNAME', 'N/A')}  [{p.get('IssueType', '')}]"
-            f"\n      SEBI Filed : {str(p.get('SebiFiledDate', '') or '')[:10]}"
-            f"\n      Price Band : {price_str}  |  "
-            f"Issue Size: {p.get('IssueSize', 'N/A')}  |  "
-            f"Lot Size: {p.get('Lotsize', 'N/A')}"
-            f"\n      Open: {open_str}  Close: {close_str}"
+            f"### {i}. {name} ({symbol})\n"
+            f"* **Type:** {issue_type}\n"
+            f"* **Price Band:** {price_str}\n"
+            f"* **Closes On:** **{close_dt}**\n"
+            f"* **Issue Size:** ₹{size} Cr\n"
+            f"* **Minimum Investment:** ₹{min_inv:,.2f} ({int(min_qty)} shares)\n"
+            f"* **Expected Listing:** {list_dt}"
         )
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Retrieves recently closed IPOs where bidding has ended. "
+    "Includes allotment prices, listing dates, and calculated listing gains. "
+    "Use this to show performance of recent market debuts. exchange: 'NSE' or 'BSE'."
+))
+def get_closed_ipos(exchange: str = "NSE", count: int = 10) -> str:
+    """
+    Args:
+        exchange: 'NSE' or 'BSE'.
+        count: Number of closed IPOs to retrieve.
+    """
+    try:
+        ex = _normalise_exchange(exchange)
+    except ValueError as e:
+        return str(e)
+        
+    url = EP["closed_ipo"].format(ex=ex, n=count)
+    response_data, err = _get(url, f"ClosedIPO[{ex}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching closed IPOs for {ex}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return f"No recently closed IPOs found for {ex}."
+
+    lines = [f"## ✅ Recently Closed IPOs — {ex}", "---"]
+    
+    for i, row in enumerate(data[:count], 1):
+        # Normalizing keys based on the mixed-case trace provided
+        name = row.get("Lname", "N/A")
+        issue_type = row.get("IssueType", "IPO")
+        symbol = row.get("Nsesymbol") or row.get("Bsesymbol") or "TBA"
+        
+        # Prices for gain calculation
+        issue_price = float(row.get("Allotmentprice") or row.get("ISSUEPRI2") or 0)
+        list_price = float(row.get("LISTPRICE") or 0)
+        
+        gain_str = ""
+        if issue_price > 0 and list_price > 0:
+            gain_perc = ((list_price - issue_price) / issue_price) * 100
+            gain_str = f" (**{'+' if gain_perc >= 0 else ''}{gain_perc:.1f}% Listing Gain**)"
+        
+        # Timeline
+        close_dt = str(row.get("CLOSDATE", ""))[:10]
+        list_dt = str(row.get("LISTDATE", ""))[:10]
+        size = row.get("IssueSize", "TBA")
+
+        lines.append(
+            f"### {i}. {name} ({symbol})\n"
+            f"* **Type:** {issue_type}\n"
+            f"* **Allotment Price:** ₹{issue_price}{gain_str}\n"
+            f"* **Listing Date:** {list_dt}\n"
+            f"* **Bidding Closed:** {close_dt}\n"
+            f"* **Issue Size:** ₹{size} Cr"
+        )
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Retrieves recently listed stocks (within the last 30-90 days). "
+    "Includes listing price, offer price, and post-listing performance. "
+    "Use this for queries about how recent IPOs are trading. exchange: 'NSE' or 'BSE'."
+))
+def get_new_ipo_listings(exchange: str = "NSE", count: int = 10) -> str:
+    """
+    Args:
+        exchange: 'NSE' or 'BSE'.
+        count: Number of recent listings to retrieve.
+    """
+    try:
+        ex = _normalise_exchange(exchange)
+    except ValueError as e:
+        return str(e)
+        
+    url = EP["new_listing"].format(ex=ex, n=count)
+    response_data, err = _get(url, f"NewListing[{ex}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching new listings for {ex}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return f"No recent IPO listings found on the {ex}."
+
+    lines = [f"## 🚀 Recent Market Debuts — {ex}", "---"]
+    
+    for i, row in enumerate(data[:count], 1):
+        # Normalizing keys based on the Pascal/Upper mix in your trace
+        name = row.get("lname") or row.get("CO_NAME") or "N/A"
+        list_dt = str(row.get("LISTDATE", ""))[:10]
+        
+        # Prices
+        offer_price = float(row.get("IssuePrice") or 0)
+        list_price = float(row.get("LISTPRICE") or 0)
+        current_price = float(row.get("CLOSE") or 0)
+        
+        # Calculate Gains
+        listing_gain = 0.0
+        if offer_price > 0 and list_price > 0:
+            listing_gain = ((list_price - offer_price) / offer_price) * 100
+            
+        post_list_perf = 0.0
+        if list_price > 0 and current_price > 0:
+            post_list_perf = ((current_price - list_price) / list_price) * 100
+
+        lines.append(
+            f"### {i}. {name}\n"
+            f"* **Listed On:** {list_dt}\n"
+            f"* **Offer Price:** ₹{offer_price:.2f} | **Listing Price:** ₹{list_price:.2f}\n"
+            f"* **Opening Gain:** {listing_gain:+.2f}%\n"
+            f"* **Current Price:** ₹{current_price:.2f} ({post_list_perf:+.2f}% since listing)\n"
+            f"* **Issue Size:** ₹{row.get('IssueSize', 'TBA')} Cr"
+        )
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Retrieves the top-performing IPOs ranked by their listing day gains. "
+    "Use this to identify historical 'blockbuster' IPOs and track their current total returns. "
+    "exchange: 'NSE' or 'BSE'."
+))
+def get_best_ipo_performers(exchange: str = "NSE", count: int = 10) -> str:
+    """
+    Args:
+        exchange: 'NSE' or 'BSE'.
+        count: Number of top performers to retrieve.
+    """
+    try:
+        ex = _normalise_exchange(exchange)
+    except ValueError as e:
+        return str(e)
+        
+    url = EP["best_ipo"].format(ex=ex, n=count)
+    response_data, err = _get(url, f"BestIPO[{ex}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching best IPO performers for {ex}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return f"No IPO performance data found for the {ex}."
+
+    lines = [f"## 🏆 Best IPO Performers (Ranked by Listing Gain) — {ex}", "---"]
+    
+    for i, row in enumerate(data[:count], 1):
+        # Normalize keys based on the trace provided
+        name = row.get("CO_NAME", "N/A")
+        list_dt = str(row.get("LISTDATE", ""))[:10]
+        
+        # Prices
+        offer_price = float(row.get("OfferPrice") or 0)
+        list_price = float(row.get("listprice") or 0)
+        current_close = float(row.get("CLOSE") or 0)
+        
+        # Gain Metrics
+        listing_gain = row.get("Per_gain_listing", 0.0)
+        
+        # Calculate Total Return (Offer Price to Current Close)
+        total_return = 0.0
+        if offer_price > 0:
+            total_return = ((current_close - offer_price) / offer_price) * 100
+
+        lines.append(
+            f"### {i}. {name}\n"
+            f"*   **Listing Gain:** 🔥 {listing_gain:.2f}%\n"
+            f"*   **Total Return (to date):** **{total_return:+.2f}%**\n"
+            f"*   **Price Journey:** Offer: ₹{offer_price:.2f} ➔ List: ₹{list_price:.2f} ➔ Current: ₹{current_close:.2f}\n"
+            f"*   **Listed On:** {list_dt}\n"
+            f"*   **Issue Size:** ₹{row.get('IssueSize', 'TBA')} Cr"
+        )
+        lines.append("")
+
+
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Retrieves comprehensive IPO details including price bands, lot sizes, "
+    "investment limits, and the breakdown of Fresh Issue vs. Offer for Sale. "
+    "Use this for a deep-dive into a specific company's IPO structure. "
+    "REQUIRES co_code — call resolve_nse_symbol first."
+))
+def get_ipo_details(co_code: int) -> str:
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
+    if err: return err
+    
+    url = EP["ipo_details"].format(co_code=val)
+    response_data, err = _get(url, f"IPODetails[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching IPO details for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No detailed IPO prospectus data found for this company."
+    
+    r = data[0]
+    name = r.get("companyname", "N/A")
+    
+    # Pricing & Lots
+    price_lo = r.get("priceband1", 0.0)
+    price_hi = r.get("priceband2", 0.0)
+    price_str = f"₹{price_lo} - ₹{price_hi}" if price_hi > 0 else f"₹{price_lo}"
+    
+    # Timeline Formatting
+    def fmt_dt(key): return str(r.get(key, ""))[:10] if r.get(key) else "TBA"
+
+    lines = [
+        f"## IPO Prospectus: {name}",
+        f"**Sector:** {r.get('sectorname', 'N/A')}",
+        "---",
+        "### 💰 Issue Structure",
+        f"*   **Total Issue Size:** ₹{r.get('totalissuesize', 0):,.2f} Cr",
+        f"    *   *Fresh Issue:* ₹{r.get('freshissue', 0):,.2f} Cr",
+        f"    *   *Offer for Sale:* ₹{r.get('Offerforsale', 0):,.2f} Cr",
+        f"*   **Price Band:** {price_str} (Face Value: ₹{r.get('facevalue')})",
+        f"*   **Type:** {r.get('issuetype', 'N/A')}",
+        "",
+        "### 🗓️ Key Dates",
+        f"*   **Open Date:** {fmt_dt('ipostartdate')}",
+        f"*   **Close Date:** {fmt_dt('ippenddate')}",
+        f"*   **Listing Date:** {fmt_dt('listdate')}",
+        "",
+        "### 🛍️ Retail Investment",
+        f"*   **Lot Size:** {int(r.get('lotsize', 0))} Shares",
+        f"*   **Min. Investment:** ₹{r.get('mininvestment', 0):,.2f} ({int(r.get('minlot', 1))} Lot)",
+        f"*   **Max. Investment:** ₹{r.get('maxinvestment', 0):,.2f} ({int(r.get('maxlot', 1))} Lots)",
+    ]
+
+    # Add discounts if applicable
+    emp_disc = r.get('employeediscount', 0)
+    if emp_disc > 0:
+        lines.append(f"*   **Employee Discount:** ₹{emp_disc} per share")
+
+    # Add Official Links
+    drhp = r.get('DRHPLINK')
+    if drhp:
+        lines.append(f"\n[Read Official DRHP/Prospectus]({drhp})")
+
     return "\n".join(lines)
 
 
 
-# @mcp.tool(description=(
-#     "Get the IPO master list: all IPOs with co_code, ISIN, company name, issue type, "
-#     "open/close dates, and minimum investment. Useful for looking up co_code values "
-#     "required by other IPO tools."
-# ))
-# def get_ipo_master() -> str:
-#     data, err = _get(EP["ipo_master"], "IPOMaster")
-#     if err:
-#         return err
-#     rows = _rows(data)
-#     if not rows:
-#         return "No IPO master data found."
- 
-#     lines = [f"IPO Master ({len(rows)} records):"]
-#     for i, row in enumerate(rows, 1):
-#         p = _pick(row, [
-#             "co_code",
-#             "isin",
-#             "companyshortname",
-#             "companyname",
-#             "issue",
-#             "issuetype",
-#             "opendate",
-#             "closedate",
-#             "type",
-#             "ipotype",
-#             "freshissue",
-#             "mininvestment",
-#         ])
-#         lines.append(
-#             f"\n  {i:>3}. [{p.get('co_code', 'N/A')}] {p.get('companyname') or p.get('companyshortname', 'N/A')}"
-#             f"  |  ISIN: {p.get('isin', 'N/A')}"
-#             f"  |  Type: {p.get('issuetype') or p.get('ipotype', 'N/A')}"
-#             f"  |  Open: {str(p.get('opendate', ''))[:10]}  Close: {str(p.get('closedate', ''))[:10]}"
-#             f"  |  Min Investment: ₹{p.get('mininvestment', 'N/A')}"
-#         )
-#     return "\n".join(lines)
- 
- 
 @mcp.tool(description=(
-    "Get IPO synopsis: company address, objects of issue, price details, "
-    "application money tranches. REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
+    "Get IPO subscription status: QIB, NII, and Retail subscription times. "
+    "Use this to gauge market demand and sentiment. "
+    "REQUIRES co_code — call resolve_nse_symbol first."
+))
+def get_ipo_subscription_status(co_code: int) -> str:
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    # Maintaining your exact validation logic
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
+    if err:
+        return err
+        
+    url = EP["subscription_status"].format(co_code=val)
+    response_data, err = _get(url, f"SubscriptionStatus[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching subscription data for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No subscription data found for this company."
+    
+    r = data[0]
+    name = r.get("companyname", "N/A")
+    lines = [f"## IPO Subscription Status: {name}", "---"]
+
+    # Mapping to the exact PascalCase keys found in the IRFC trace
+    categories = [
+        ("Institutional (QIB)", "QualifiedInstitutionalBuyers_QIB_Subscribed"),
+        ("Non-Institutional (NII)", "NonInstitutionalInvestors_NII_Subscribed"),
+        ("Retail (RII)", "RetailIndividualInvestors_RII_Subscribed"),
+        ("Employee Portion", "EmployeeReservation_Subscribed"),
+        ("Shareholder Portion", "ReservationPortionShareholder_ExistingRetailShareholders_Subscribed"),
+    ]
+
+    for label, key in categories:
+        sub_val = r.get(key, 0.0)
+        # Check if the tranche was actually offered
+        offered_key = key.replace("_Subscribed", "_Shareoffered")
+        if r.get(offered_key, 0) > 0:
+            status_emoji = "🔥" if sub_val > 10 else "✅" if sub_val >= 1 else "⏳"
+            lines.append(f"*   **{label}:** {sub_val:.2f}x {status_emoji}")
+
+    total = r.get("Total_Subscribed", 0.0)
+    lines.append("---")
+    lines.append(f"### **Total Aggregate Subscription: {total:.2f}x**")
+    
+    return "\n".join(lines)
+
+
+
+@mcp.tool(description=(
+    "Retrieves recently filed Draft Red Herring Prospectus (DRHP) documents with SEBI. "
+    "Use this to identify future IPOs months before they open for subscription. "
+    "exchange: 'NSE' or 'BSE'."
+))
+def get_forthcoming_drh_filings(exchange: str = "NSE", count: int = 10) -> str:
+    """
+    Args:
+        exchange: 'NSE' or 'BSE'.
+        count: Number of recent filings to retrieve.
+    """
+    try:
+        ex = _normalise_exchange(exchange)
+    except ValueError as e:
+        return str(e)
+        
+    url = EP["forthcoming_drh"].format(ex=ex, n=count)
+    response_data, err = _get(url, f"ForthcomingDRH[{ex}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching DRHP filings for {ex}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return f"No recent DRHP filings found for {ex}."
+
+    lines = [f"## 📁 Forthcoming DRHP Filings (SEBI Queue) — {ex}", "---"]
+    
+    for i, row in enumerate(data[:count], 1):
+        # Normalizing keys from the mixed-case trace
+        name = row.get("LNAME", "N/A")
+        issue_type = row.get("IssueType", "TBA")
+        filed_date = str(row.get("SebiFiledDate", ""))[:10]
+        size = row.get("IssueSize", "0.00")
+        
+        # Display Logic: At DRHP stage, size 0.00 usually means 'Amount not yet finalized'
+        size_str = f"₹{size} Cr" if float(size) > 0 else "Amount TBA"
+        
+        lines.append(
+            f"### {i}. {name}\n"
+            f"*   **Status:** Filed with SEBI on **{filed_date}**\n"
+            f"*   **Expected Size:** {size_str}\n"
+            f"*   **Issue Type:** {issue_type}\n"
+            f"*   **Timeline:** Awaiting SEBI Observation/Approval"
+        )
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+
+@mcp.tool(description=(
+    "Retrieves the IPO synopsis, including the company's contact details, "
+    "the objects of the issue (reason for raising funds), and application money tranches. "
+    "Use this to understand the 'Why' behind an IPO. REQUIRES co_code."
 ))
 def get_ipo_synopsis(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    # Maintaining your exact validation logic
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
+        
     url = EP["ipo_synopsis"].format(co_code=val)
-    data, err = _get(url, f"IPOSynopsis[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No synopsis data found."
-    r = rows[0]
-    p = _pick(r, [
-        "lname",
-        "regadd1", "regadd2", "regdist", "regstate", "regpin",
-        "tel1", "fax1", "email", "internet",
-        "co_code",
-        "object",
-        "opendate", "closdate",
-        "appnmoney1", "appnmoney2",
-        "alotmoney1", "alotmoney2",
-        "multiples", "min_appln",
-        "projcost", "publiss1",
-        "tot_eqty", "issueprice",
-    ])
-    address = ", ".join(filter(None, [
-        p.get("regadd1"), p.get("regadd2"),
-        p.get("regdist"), p.get("regstate"), p.get("regpin"),
-    ]))
-    lines = [
-        f"IPO Synopsis — {p.get('lname', 'N/A')}",
-        f"  Address      : {address}",
-        f"  Tel          : {p.get('tel1', 'N/A')}  |  Fax: {p.get('fax1', 'N/A')}",
-        f"  Email        : {p.get('email', 'N/A')}  |  Web: {p.get('internet', 'N/A')}",
-        f"  Open         : {str(p.get('opendate', ''))[:10]}  |  Close: {str(p.get('closdate', ''))[:10]}",
-        f"  Issue Price  : ₹{p.get('issueprice', 'N/A')}",
-        f"  Min Appln    : {p.get('min_appln', 'N/A')}  |  Multiples: {p.get('multiples', 'N/A')}",
-        f"  Project Cost : {p.get('projcost', 'N/A')}  |  Public Issue: {p.get('publiss1', 'N/A')}",
-        f"  Total Equity : {p.get('tot_eqty', 'N/A')}",
-        f"  Appln Money  : On Application ₹{p.get('appnmoney1', 'N/A')} / On Allotment ₹{p.get('alotmoney1', 'N/A')}",
-        f"  Objects      : {p.get('object', 'N/A')}",
+    response_data, err = _get(url, f"IPOSynopsis[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching synopsis for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No synopsis data found for this company."
+    
+    r = data[0]
+    
+    # Address formatting
+    addr_parts = [
+        r.get("regadd1"), r.get("regadd2"), r.get("regdist"), 
+        r.get("regstate"), r.get("regpin")
     ]
+    address = ", ".join([str(p).strip() for p in addr_parts if p])
+
+    # Narrative cleanup
+    object_text = r.get("object", "N/A").replace("\r\n", " ").strip()
+    
+    lines = [
+        f"## IPO Synopsis: {r.get('lname', 'N/A')}",
+        "---",
+        "### 🏢 Registered Office",
+        f"*   **Address:** {address}",
+        f"*   **Contact:** {r.get('tel1', 'N/A')} | {r.get('email', 'N/A')}",
+        f"*   **Website:** {r.get('internet', 'N/A')}",
+        "",
+        "### 🎯 Objects of the Issue",
+        f"{object_text[:1000]}..." if len(object_text) > 1000 else object_text,
+        "",
+        "### 💳 Financial Details",
+        f"*   **Issue Price:** ₹{r.get('ISSUEPRICE', 'N/A')}",
+        f"*   **Min Application:** {int(r.get('MIN_APPLN', 0))} (Multiples of {int(r.get('MULTIPLES', 0))})",
+        f"*   **Issue Size:** ₹{r.get('publiss1', 'N/A')} Cr",
+        f"*   **Application Money:** On App: ₹{r.get('APPNMONEY1', 'N/A')} | On Allotment: ₹{r.get('ALOTMONEY1', 'N/A')}"
+    ]
+
     return "\n".join(lines)
- 
+
+
  
 @mcp.tool(description=(
-    "Get IPO key timeline dates: subscription open/close, allotment date, "
-    "refund date, demat credit date, and listing date. "
-    "REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
+    "Retrieves the critical dates for an IPO's lifecycle, including subscription window, "
+    "allotment, refund initiation, demat credit, and the final listing date. "
+    "Essential for liquidity planning. REQUIRES co_code."
 ))
 def get_ipo_timeline(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    # Maintaining your exact validation line
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
+        
     url = EP["ipo_timeline"].format(co_code=val)
-    data, err = _get(url, f"IPOTimeline[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No timeline data found."
-    r = rows[0]
-    p = _pick(r, [
-        "co_code",
-        "ipostartdate",
-        "ippenddate",
-        "AllotmentDate",
-        "RefundDate",
-        "CreditofsharestoDemataccountDate",
-        "ListingDate",
-    ])
+    response_data, err = _get(url, f"IPOTimeline[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching timeline for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No timeline data found for this company."
+    
+    r = data[0]
+    
     lines = [
-        f"IPO Timeline — co_code {p.get('co_code', val)}",
-        f"  Subscription Open  : {str(p.get('ipostartdate', 'N/A'))[:10]}",
-        f"  Subscription Close : {str(p.get('ippenddate', 'N/A'))[:10]}",
-        f"  Allotment Date     : {str(p.get('AllotmentDate', 'N/A'))[:10]}",
-        f"  Refund Date        : {str(p.get('RefundDate', 'N/A'))[:10]}",
-        f"  Demat Credit Date  : {str(p.get('CreditofsharestoDemataccountDate', 'N/A'))[:10]}",
-        f"  Listing Date       : {str(p.get('ListingDate', 'N/A'))[:10]}",
+        f"## IPO Timeline (Code: {val})",
+        "---",
+        f"*   **Subscription Period:** {r.get('ipostartdate', 'N/A')} to {r.get('ippenddate', 'N/A')}",
+        f"*   **Basis of Allotment:** {r.get('AllotmentDate', 'N/A')}",
+        f"*   **Initiation of Refunds:** {r.get('RefundDate', 'N/A')}",
+        f"*   **Credit of Shares to Demat:** {r.get('CreditofsharestoDemataccountDate', 'N/A')}",
+        f"*   **Listing Date:** **{r.get('ListingDate', 'N/A')}**",
+        "",
+        "> **Note:** Dates are subject to change based on exchange notifications."
     ]
+
     return "\n".join(lines)
+
  
  
 @mcp.tool(description=(
-    "Get IPO promoter details: promoter names, pre- and post-issue shareholding "
-    "shares and percentages. REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
+    "Retrieves details of IPO promoters, including their pre-issue and post-issue "
+    "shareholding counts and percentages. Crucial for assessing promoter commitment. "
+    "REQUIRES co_code — call resolve_nse_symbol first."
 ))
 def get_ipo_promoter_details(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    # Maintaining your exact validation logic
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
+        
     url = EP["ipo_promoter_details"].format(co_code=val)
-    data, err = _get(url, f"IPOPromoterDetails[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No promoter details found."
- 
-    company = rows[0].get("CompanyName") or rows[0].get("companyname", "N/A")
-    lines = [f"IPO Promoter Details — {company}"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "CompanyCode",
-            "CompanyName",
-            "issuetype",
-            "sno",
-            "PromotersName",
-            "PreIssueShares",
-            "PreIssuePercentage",
-            "PostIssueShares",
-            "PostIssuePercentage",
-        ])
-        lines.append(
-            f"\n  {i:>2}. {p.get('PromotersName', 'N/A')}"
-            f"\n      Pre-Issue : {p.get('PreIssueShares', 'N/A')} shares "
-            f"({p.get('PreIssuePercentage', 'N/A')}%)"
-            f"\n      Post-Issue: {p.get('PostIssueShares', 'N/A')} shares "
-            f"({p.get('PostIssuePercentage', 'N/A')}%)"
-        )
+    response_data, err = _get(url, f"IPOPromoterDetails[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching promoter details for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No promoter detail data found for this company."
+    
+    # Extracting company name from the first record
+    company = data[0].get("CompanyName") or data[0].get("companyname", "N/A")
+    lines = [f"## IPO Promoter Shareholding: {company}", "---"]
+
+    for i, row in enumerate(data, 1):
+        # Mapping to PascalCase keys found in your trace
+        name = row.get("PromotersName", "N/A")
+        pre_shares = row.get("PreIssueShares", 0)
+        pre_perc = row.get("PreIssuePercentage", 0.0)
+        post_shares = row.get("PostIssueShares", 0)
+        post_perc = row.get("PostIssuePercentage", 0.0)
+        
+        lines.append(f"### {i}. {name}")
+        lines.append(f"*   **Pre-Issue Holding:** {int(pre_shares):,} shares (**{pre_perc:.2f}%**)")
+        lines.append(f"*   **Post-Issue Holding:** {int(post_shares):,} shares (**{post_perc:.2f}%**)")
+        lines.append("")
+
     return "\n".join(lines)
  
+
  
 @mcp.tool(description=(
     "Get IPO listing info: listing date, BSE code, NSE symbol, ISIN, and final issue price. "
     "REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
 ))
 def get_ipo_listing_info(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
     url = EP["ipo_listing_info"].format(co_code=val)
@@ -5050,6 +5289,8 @@ def get_ipo_listing_info(co_code: int) -> str:
         f"  Final Issue Price: ₹{p.get('FinalIssuePrice', 'N/A')}",
     ]
     return "\n".join(lines)
+
+
  
  
 @mcp.tool(description=(
@@ -5057,7 +5298,7 @@ def get_ipo_listing_info(co_code: int) -> str:
     "REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
 ))
 def get_ipo_registrar(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
     url = EP["ipo_registrar"].format(co_code=val)
@@ -5091,7 +5332,7 @@ def get_ipo_registrar(co_code: int) -> str:
     "REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
 ))
 def get_ipo_lead_managers(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
     url = EP["ipo_lead_manager"].format(co_code=val)
@@ -5111,358 +5352,386 @@ def get_ipo_lead_managers(co_code: int) -> str:
  
  
 @mcp.tool(description=(
-    "Get IPO prospectus list filed with SEBI. Optionally filter by company name (partial match) "
-    "or co_code. If neither is provided, returns the first 20 records. "
-    "Fields: co_code, lname, opendate, closdate, dpdate, dp, dpclear, VOLYR, VOLSRNO, ClosDate."
+    "Retrieves the master list of IPO prospectus filings with SEBI. "
+    "Use this to find company codes (co_code) and verify formal filing dates (dpdate). "
+    "Optionally filter by company name (partial match) or co_code."
 ))
 def get_ipo_prospectus(company_name: str = "", co_code: int = 0) -> str:
+    """
+    Args:
+        company_name: Partial or full company name to filter.
+        co_code: Specific CMOTS company code to retrieve.
+    """
     url = EP["ipo_prospectus"]
-    data, err = _get(url, "IPOProspectus")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No prospectus data found."
+    response_data, err = _get(url, "IPOProspectus")
+    
+    if err or not response_data.get("success"):
+        return "Error fetching the IPO prospectus master list."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "The prospectus database is currently empty."
 
-    # ── Filter ───────────────────────────────────────────────────────────────
+    # ── Filter Logic ────────────────────────────────────────────────────────
+    # Maintains your existing filtering structure
     if co_code and int(co_code) > 0:
-        rows = [r for r in rows if str(r.get("co_code", "")) == str(co_code)]
+        filtered_rows = [r for r in data if str(r.get("co_code", "")) == str(co_code)]
     elif company_name.strip():
         keyword = company_name.strip().lower()
-        rows = [r for r in rows if keyword in str(r.get("lname", "")).lower()]
+        filtered_rows = [r for r in data if keyword in str(r.get("lname", "")).lower()]
+    else:
+        # Default view: most recent filings
+        filtered_rows = data[:20]
 
-    if not rows:
+    if not filtered_rows:
         return f"No prospectus records found matching your query."
 
-    # ── If no filter given, cap at 20 to avoid huge output ──────────────────
-    if not co_code and not company_name.strip():
-        rows = rows[:20]
+    lines = [f"## SEBI IPO Prospectus Registry ({len(filtered_rows)} records)", "---"]
+    
+    for i, row in enumerate(filtered_rows, 1):
+        # Extracting data using keys identified in your trace
+        name = row.get("lname", "N/A")
+        code = row.get("co_code", "N/A")
+        dp_date = str(row.get("dpdate", ""))[:10] if row.get("dpdate") else "TBA"
+        open_dt = str(row.get("opendate", ""))[:10] if row.get("opendate") else "TBA"
+        
+        # Handling the dual casing of ClosDate found in your trace
+        close_dt = str(row.get("closdate") or row.get("ClosDate") or "")[:10]
+        if not close_dt: close_dt = "TBA"
 
-    lines = [f"IPO Prospectus (SEBI filings) — {len(rows)} record(s):"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "co_code",
-            "lname",
-            "opendate",
-            "closdate",
-            "ClosDate",    # alternate casing seen in some responses
-            "dpdate",
-            "dp",
-            "dpclear",
-            "VOLYR",
-            "VOLSRNO",
-        ])
-        close = str(p.get("closdate") or p.get("ClosDate") or "")[:10]
         lines.append(
-            f"\n  {i:>3}. [{p.get('co_code', 'N/A')}] {p.get('lname', 'N/A')}"
-            f"\n       Open   : {str(p.get('opendate', ''))[:10]}  |  Close: {close}"
-            f"\n       DP Date: {str(p.get('dpdate', ''))[:10]}  |  DP: {p.get('dp', 'N/A')}"
-            f"\n       DP Clear: {p.get('dpclear', 'N/A')}  |  "
-            f"Vol/Yr: {p.get('VOLYR', 'N/A')}  |  Vol SrNo: {p.get('VOLSRNO', 'N/A')}"
+            f"### {i}. {name} (Code: {code})\n"
+            f"*   **Status:** Prospectus filed on {dp_date}\n"
+            f"*   **Subscription window:** {open_dt} to {close_dt}\n"
+            f"*   **Designation:** VOLYR {row.get('VOLYR', 'N/A')} | SrNo {row.get('VOLSRNO', 'N/A')}"
         )
+        lines.append("")
+
     return "\n".join(lines)
  
- 
 @mcp.tool(description=(
-    "Get detailed IPO allocation breakdown: QIB / NII / Retail share percentages, "
-    "fresh issue vs OFS split, price range, issue size range, anchor investor portion, "
-    "business summary, industry summary, promoter pre/post shareholding. "
-    "REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
+    "Retrieves the complete IPO allocation structure, including tranches for Retail, QIB, "
+    "and NII investors, anchor portions, and detailed business/industry summaries. "
+    "Use this for comprehensive due diligence on an IPO. REQUIRES co_code."
 ))
 def get_ipo_allocation_details(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    # Maintaining your exact validation logic
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
+        
     url = EP["ipo_allocation_details"].format(co_code=val)
-    data, err = _get(url, f"IPOAllocationDetails[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No allocation detail data found."
-    r = rows[0]
-    p = _pick(r, [
-        "companycode", "isin", "companyname", "issuetype",
-        "freshissue_noofshares", "freshissue_amountrscr",
-        "offerforsale_noofshares", "offerforsale_amountrscr",
-        "total_noofshares", "total_amountrscr",
-        "pricefixed", "pricerangefrom", "pricerangeto",
-        "issuesizefrom", "issuesizeto",
-        "sharesofferedtoexistingshareholders",
-        "sharesofferedtoemployees",
-        "sharesofferedtomarketmakers",
-        "totalsharesofferedtoqib",
-        "ofwhichanchorinvestors",
-        "balanceavailableforallocationtoqibsotherthananchorinvestors",
-        "availableforallocationtomutualfundsonly",
-        "balanceofqibportionforallqibsincludingmutualfunds",
-        "sharesofferedtonon_institutionalportion",
-        "sharesofferedtoretailportion",
-        "sharesofferedtononretail",
-        "qib_per", "non_institutionalportion_per", "retailportion_per",
-        "finalisationofbasisofallotmentwiththedesignatedstockexchange",
-        "initiationofrefunds",
-        "creditofequitysharestodemataccountsofallottees",
-        "commencementoftradingoftheequitysharesonthestockexchanges",
-        "creditratingby", "creditrating",
-        "businesssummary", "industrysummary", "companyhistory",
-        "promoterspreshareholdingnoofshares",
-        "promoterspreshareholdingpercentage",
-        "promoterspostshareholdingnoofshares",
-        "comments",
-    ])
- 
-    # price band
-    if p.get("pricerangefrom") and p.get("pricerangeto"):
-        price_str = f"₹{p['pricerangefrom']} – ₹{p['pricerangeto']}"
-    elif p.get("pricefixed"):
-        price_str = f"₹{p['pricefixed']} (fixed)"
-    else:
-        price_str = "N/A"
- 
+    response_data, err = _get(url, f"IPOAllocationDetails[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching allocation details for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No allocation detail data found for this company."
+    
+    r = data[0]
+    name = r.get("CompanyName", "N/A")
+    
+    # ── Narrative Summaries ──
+    biz_summary = r.get("BusinessSummary", "N/A").replace("\r\n", " ").strip()
+    ind_summary = r.get("IndustrySummary", "N/A").replace("\r\n", " ").strip()
+
     lines = [
-        f"IPO Allocation Details — {p.get('companyname', 'N/A')}  [{p.get('issuetype', '')}]",
-        f"  ISIN          : {p.get('isin', 'N/A')}",
-        f"  Price Band    : {price_str}",
-        f"  Issue Size    : ₹{p.get('issuesizefrom', 'N/A')} – ₹{p.get('issuesizeto', 'N/A')} cr",
+        f"## IPO Allocation & Business Deep-Dive: {name}",
+        "---",
+        "### 🏢 Business Overview",
+        f"{biz_summary[:800]}..." if len(biz_summary) > 800 else biz_summary,
         "",
-        "  ── Issue Structure ──",
-        f"  Fresh Issue   : {p.get('freshissue_noofshares', 'N/A')} shares  "
-            f"(₹{p.get('freshissue_amountrscr', 'N/A')} cr)",
-        f"  OFS           : {p.get('offerforsale_noofshares', 'N/A')} shares  "
-            f"(₹{p.get('offerforsale_amountrscr', 'N/A')} cr)",
-        f"  Total         : {p.get('total_noofshares', 'N/A')} shares  "
-            f"(₹{p.get('total_amountrscr', 'N/A')} cr)",
+        "### 📊 Allocation Structure",
+        f"*   **Retail Portion:** {r.get('RetailPortion_Per', 0)}%",
+        f"*   **Non-Institutional (NII):** {r.get('Non_InstitutionalPortion_Per', 0)}%",
+        f"*   **Institutional (QIB):** {r.get('QIB_Per', 0)}%",
+        f"    *   *Anchor Allocation:* {int(r.get('OfwhichAnchorInvestors', 0)):,} shares",
         "",
-        "  ── Allocation Split ──",
-        f"  QIB           : {p.get('totalsharesofferedtoqib', 'N/A')} shares  "
-            f"({p.get('qib_per', 'N/A')}%)",
-        f"    of which Anchor Investors : {p.get('ofwhichanchorinvestors', 'N/A')}",
-        f"    Balance for other QIBs    : {p.get('balanceavailableforallocationtoqibsotherthananchorinvestors', 'N/A')}",
-        f"    of which MF only          : {p.get('availableforallocationtomutualfundsonly', 'N/A')}",
-        f"    All QIBs incl MF (balance): {p.get('balanceofqibportionforallqibsincludingmutualfunds', 'N/A')}",
-        f"  NII           : {p.get('sharesofferedtonon_institutionalportion', 'N/A')} shares  "
-            f"({p.get('non_institutionalportion_per', 'N/A')}%)",
-        f"  Retail        : {p.get('sharesofferedtoretailportion', 'N/A')} shares  "
-            f"({p.get('retailportion_per', 'N/A')}%)",
-        f"  Non-Retail    : {p.get('sharesofferedtononretail', 'N/A')} shares",
-        f"  Employee Rsv  : {p.get('sharesofferedtoemployees', 'N/A')} shares",
-        f"  Existing SH   : {p.get('sharesofferedtoexistingshareholders', 'N/A')} shares",
-        f"  Market Maker  : {p.get('sharesofferedtomarketmakers', 'N/A')} shares",
+        "### 💰 Issue Breakdown",
+        f"*   **Fresh Issue:** {int(r.get('FreshIssue_NoofShares', 0)):,} shares",
+        f"*   **Offer for Sale:** {int(r.get('OfferforSale_NoofShares', 0)):,} shares",
+        f"*   **Total Issue Size:** {int(r.get('Total_NoofShares', 0)):,} shares",
         "",
-        "  ── Key Dates ──",
-        f"  Allotment Finalisation : {str(p.get('finalisationofbasisofallotmentwiththedesignatedstockexchange', ''))[:10]}",
-        f"  Refund Initiation      : {str(p.get('initiationofrefunds', ''))[:10]}",
-        f"  Demat Credit           : {str(p.get('creditofequitysharestodemataccountsofallottees', ''))[:10]}",
-        f"  Trading Commencement   : {str(p.get('commencementoftradingoftheequitysharesonthestockexchanges', ''))[:10]}",
+        "### 🗓️ Critical Dates",
+        f"*   **Basis of Allotment:** {str(r.get('FinalisationofBasisofAllotmentwiththeDesignatedStockExchange', ''))[:10]}",
+        f"*   **Demat Credit:** {str(r.get('CreditofEquitySharestodemataccountsofAllottees', ''))[:10]}",
+        f"*   **Trading Starts:** {str(r.get('CommencementoftradingoftheEquitySharesontheStockExchanges', ''))[:10]}",
         "",
-        "  ── Credit Rating ──",
-        f"  Rated by: {p.get('creditratingby', 'N/A')}  |  Rating: {p.get('creditrating', 'N/A')}",
-        "",
-        "  ── Promoter Holding ──",
-        f"  Pre-Issue : {p.get('promoterspreshareholdingnoofshares', 'N/A')} shares  "
-            f"({p.get('promoterspreshareholdingpercentage', 'N/A')}%)",
-        f"  Post-Issue: {p.get('promoterspostshareholdingnoofshares', 'N/A')} shares",
-        "",
-        f"  Business Summary : {p.get('businesssummary', 'N/A')}",
-        f"  Industry Summary : {p.get('industrysummary', 'N/A')}",
-        f"  Comments         : {p.get('comments', 'N/A')}",
+        "### 🏭 Industry Context",
+        f"{ind_summary[:500]}..." if len(ind_summary) > 500 else ind_summary
     ]
+
     return "\n".join(lines)
  
- 
+
+
 @mcp.tool(description=(
-    "Get IPO selling shareholder details: who is selling in the OFS, "
-    "category, number of shares offered, and pre/post holding percentages. "
-    "REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
+    "Retrieves details of shareholders selling their stakes in an IPO (Offer for Sale). "
+    "Identifies who is exiting or diluting, their category (Promoter/Investor), "
+    "and their pre/post issue holding percentages. REQUIRES co_code."
 ))
 def get_ipo_selling_shareholders(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    # Maintaining your exact validation logic
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
+        
     url = EP["ipo_selling_shareholders"].format(co_code=val)
-    data, err = _get(url, f"IPOSellingShareholders[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No selling shareholder data found."
- 
-    company = rows[0].get("companyname", "N/A")
-    lines = [f"IPO Selling Shareholders (OFS) — {company}"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "companycode", "companyname", "issuetype", "sno",
-            "sellingshareholders", "category",
-            "noofsharesoffered",
-            "preholdingshares", "preholding_per",
-            "postholdingshares", "postholding_per",
-        ])
-        lines.append(
-            f"\n  {i:>2}. {p.get('sellingshareholders', 'N/A')}  [{p.get('category', 'N/A')}]"
-            f"\n      Shares Offered: {p.get('noofsharesoffered', 'N/A')}"
-            f"\n      Pre-Holding   : {p.get('preholdingshares', 'N/A')} shares "
-            f"({p.get('preholding_per', 'N/A')}%)"
-            f"\n      Post-Holding  : {p.get('postholdingshares', 'N/A')} shares "
-            f"({p.get('postholding_per', 'N/A')}%)"
-        )
+    response_data, err = _get(url, f"IPOSellingShareholders[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching selling shareholder data for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No selling shareholder records found for this issue."
+    
+    # Extracting company name from the first record
+    company = data[0].get("CompanyName") or data[0].get("companyname", "N/A")
+    lines = [f"## IPO Selling Shareholders (OFS Breakdown): {company}", "---"]
+
+    for i, row in enumerate(data, 1):
+        # Mapping to PascalCase keys found in your trace
+        entity = row.get("SellingShareholders", "N/A")
+        category = row.get("Category", "N/A")
+        offered = row.get("NoofSharesOffered", 0)
+        
+        pre_shares = row.get("PreHoldingShares", 0)
+        pre_perc = row.get("PreHolding_Per", 0.0)
+        post_shares = row.get("PostHoldingShares", 0)
+        post_perc = row.get("PostHolding_Per", 0.0)
+        
+        lines.append(f"### {i}. {entity} [{category}]")
+        lines.append(f"*   **Shares Offered in OFS:** {int(offered):,} shares")
+        lines.append(f"*   **Holding Pre-Issue:** {int(pre_shares):,} shares ({pre_perc:.2f}%)")
+        lines.append(f"*   **Holding Post-Issue:** {int(post_shares):,} shares ({post_perc:.2f}%)")
+        lines.append("")
+
     return "\n".join(lines)
- 
+
+
  
 @mcp.tool(description=(
-    "Get IPO industry peer comparison: peer companies' EPS (basic/diluted), NAV per share, "
-    "P/E ratio, RoNW, face value, and total income — useful for valuation benchmarking. "
+    "Retrieves IPO industry peer comparison data, including EPS, NAV per share, "
+    "P/E ratios, RoNW, and Total Income. Essential for valuation benchmarking. "
     "REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
 ))
 def get_ipo_industry_peers(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    # STRICTLY PRESERVING REQUIRED VALIDATION LOGIC
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
+        
     url = EP["ipo_industry_peers"].format(co_code=val)
-    data, err = _get(url, f"IPOIndustryPeers[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No industry peer data found."
- 
-    company = rows[0].get("companyname", "N/A")
-    lines = [f"IPO Industry Peer Comparison — {company}"]
-    for i, row in enumerate(rows, 1):
+    response_data, err = _get(url, f"IPOIndustryPeers[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching industry peer data for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No industry peer comparison data found for this issue."
+    
+    # Extracting core company name from the trace
+    company = data[0].get("CompanyName") or data[0].get("companyname", "N/A")
+    lines = [f"## Industry Peer Comparison: {company}", "---"]
+
+    for i, row in enumerate(data, 1):
+        # Using _pick with the exact PascalCase keys identified in your trace
         p = _pick(row, [
-            "companycode", "companyname", "issuetype", "sno",
-            "companyname_peercompany",
-            "facevalue",
-            "standalone_consolidated",
-            "yrc",
-            "totalincome",
-            "epsbasis", "epsdiluted",
-            "navpershare",
-            "pebasiceps", "pedilutedeps",
-            "ronw_per",
-            "latestnavperiod", "latestnav",
-            "comment",
+            "CompanyName_PeerCompany",
+            "FaceValue",
+            "Standalone_Consolidated",
+            "YRC",
+            "TotalIncome",
+            "EPSBasis",
+            "NAVPerShare",
+            "PEBasicEPS",
+            "RONW_Per",
+            "LatestNAV"
         ])
-        lines.append(
-            f"\n  {i:>2}. {p.get('companyname_peercompany', 'N/A')}  "
-            f"[{p.get('standalone_consolidated', '')}]  FY: {p.get('yrc', 'N/A')}"
-            f"\n      FV: ₹{p.get('facevalue', 'N/A')}  |  Total Income: {p.get('totalincome', 'N/A')}"
-            f"\n      EPS Basic: {p.get('epsbasis', 'N/A')}  |  EPS Diluted: {p.get('epsdiluted', 'N/A')}"
-            f"\n      NAV/Share: {p.get('navpershare', 'N/A')}  |  Latest NAV ({p.get('latestnavperiod', '')}): "
-            f"{p.get('latestnav', 'N/A')}"
-            f"\n      P/E Basic: {p.get('pebasiceps', 'N/A')}  |  P/E Diluted: {p.get('pedilutedeps', 'N/A')}"
-            f"\n      RoNW: {p.get('ronw_per', 'N/A')}%"
-        )
+        
+        peer_name = p.get("CompanyName_PeerCompany", "N/A")
+        year = str(int(p.get("YRC", 0)))[:4] if p.get("YRC") else "N/A"
+        
+        lines.append(f"### {i}. {peer_name} (FY {year})")
+        lines.append(f"*   **Financials:** {p.get('Standalone_Consolidated', 'Standalone')}")
+        lines.append(f"*   **Total Income:** ₹{p.get('TotalIncome', 'N/A'):,} Cr")
+        lines.append(f"*   **Valuation Metrics:**")
+        lines.append(f"    *   EPS (Basic): {p.get('EPSBasis', 'N/A')}")
+        lines.append(f"*   **P/E Ratio:** {p.get('PEBasicEPS') if p.get('PEBasicEPS') else 'N/A'}")
+        lines.append(f"*   **Return on Net Worth (RoNW):** {p.get('RONW_Per', 'N/A')}%")
+        lines.append(f"*   **NAV Per Share:** ₹{p.get('NAVPerShare', 'N/A')} (Latest: ₹{p.get('LatestNAV', 'N/A')})")
+        lines.append("")
+
     return "\n".join(lines)
  
- 
 @mcp.tool(description=(
-    "Get IPO risk factors listed in the prospectus. "
+    "Retrieves the internal and external risk factors associated with an IPO "
+    "as disclosed in the prospectus. Essential for balanced investment analysis. "
     "REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
 ))
 def get_ipo_risk_details(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    # STRICTLY PRESERVING REQUIRED VALIDATION LOGIC
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
+        
     url = EP["ipo_risk_details"].format(co_code=val)
-    data, err = _get(url, f"IPORiskDetails[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No risk detail data found."
- 
-    company = rows[0].get("companyname", "N/A")
-    lines = [f"IPO Risk Factors — {company}"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "companycode", "companyname", "issuetype",
-            "sno", "risktype", "riskdetails",
-        ])
-        lines.append(
-            f"\n  {i:>2}. [{p.get('risktype', 'N/A')}]\n      {p.get('riskdetails', 'N/A')}"
-        )
+    response_data, err = _get(url, f"IPORiskDetails[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching risk details for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No risk factor data found for this issue."
+    
+    # Extracting company name from the first record
+    company = data[0].get("CompanyName") or data[0].get("companyname", "N/A")
+    lines = [f"## ⚠️ IPO Risk Factors: {company}", "---"]
+
+    for i, row in enumerate(data, 1):
+        # Normalizing keys from the PascalCase trace provided
+        risk_type = row.get("RiskType", "Risk Factor")
+        details = row.get("RiskDetails", "N/A").strip()
+        
+        lines.append(f"### {i}. {risk_type}")
+        lines.append(f"{details}")
+        lines.append("")
+
     return "\n".join(lines)
- 
+
+
  
 @mcp.tool(description=(
-    "Get IPO business strategies listed in the prospectus. "
+    "Retrieves the core business strategies and growth roadmap as disclosed in the IPO prospectus. "
+    "Use this to understand how the company plans to scale post-listing. "
     "REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
 ))
 def get_ipo_strategy_details(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    # STRICTLY PRESERVING REQUIRED VALIDATION LOGIC
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
+        
     url = EP["ipo_strategy_details"].format(co_code=val)
-    data, err = _get(url, f"IPOStrategyDetails[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No strategy detail data found."
- 
-    company = rows[0].get("companyname", "N/A")
-    lines = [f"IPO Business Strategies — {company}"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "companycode", "companyname", "issuetype",
-            "sno", "strategydetails",
-        ])
-        lines.append(f"\n  {i:>2}. {p.get('strategydetails', 'N/A')}")
+    response_data, err = _get(url, f"IPOStrategyDetails[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching strategy details for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No business strategy data found for this issue."
+    
+    # Normalizing company name from the PascalCase trace provided
+    company = data[0].get("CompanyName") or data[0].get("companyname", "N/A")
+    lines = [f"## 🎯 Business Growth Strategy: {company}", "---"]
+
+    for i, row in enumerate(data, 1):
+        # Extracting strategy narrative using the correct key from your trace
+        strategy = row.get("StrategyDetails", "N/A").strip()
+        lines.append(f"{i}. **{strategy}**")
+
     return "\n".join(lines)
- 
- 
+
+
 @mcp.tool(description=(
-    "Get IPO competitive strengths listed in the prospectus. "
+    "Retrieves the competitive strengths and core advantages of the company as "
+    "disclosed in the IPO prospectus. Use this to identify the investment 'moat'. "
     "REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
 ))
 def get_ipo_strength_details(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    # STRICTLY PRESERVING REQUIRED VALIDATION LOGIC
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
+        
     url = EP["ipo_strength_details"].format(co_code=val)
-    data, err = _get(url, f"IPOStrengthDetails[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No strength detail data found."
- 
-    company = rows[0].get("companyname", "N/A")
-    lines = [f"IPO Competitive Strengths — {company}"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "companycode", "companyname", "issuetype",
-            "sno", "strengthdetails",
-        ])
-        lines.append(f"\n  {i:>2}. {p.get('strengthdetails', 'N/A')}")
+    response_data, err = _get(url, f"IPOStrengthDetails[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching strength details for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No competitive strength data found for this issue."
+    
+    # Normalizing company name from the PascalCase trace provided
+    company = data[0].get("CompanyName") or data[0].get("companyname", "N/A")
+    lines = [f"## 💪 Competitive Strengths: {company}", "---"]
+
+    for i, row in enumerate(data, 1):
+        # Extracting strength narrative using the correct key from your trace
+        strength = row.get("StrengthDetails", "N/A").strip()
+        lines.append(f"{i}. **{strength}**")
+
     return "\n".join(lines)
  
+
+
  
 @mcp.tool(description=(
-    "Get IPO product and service details from the prospectus. "
-    "REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
+    "Retrieves the core products and services of the company as disclosed in the "
+    "IPO prospectus. Use this to understand the company's business model and "
+    "revenue drivers. REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
 ))
 def get_ipo_product_services(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    # STRICTLY PRESERVING REQUIRED VALIDATION LOGIC
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
+        
     url = EP["ipo_product_services"].format(co_code=val)
-    data, err = _get(url, f"IPOProductServices[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No product/service data found."
- 
-    company = rows[0].get("CompanyName", "N/A")
-    lines = [f"IPO Products & Services — {company}"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "CompanyCode", "CompanyName", "issuetype",
-            "sno", "Product_Services_Details",
-        ])
-        lines.append(f"\n  {i:>2}. {p.get('Product_Services_Details', 'N/A')}")
+    response_data, err = _get(url, f"IPOProductServices[{val}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching product/service details for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No product or service data found for this company."
+    
+    # Extracting company name from the PascalCase trace
+    company = data[0].get("CompanyName") or data[0].get("companyname", "N/A")
+    lines = [f"## 🛠️ Products & Services: {company}", "---"]
+
+    for i, row in enumerate(data, 1):
+        # Using the exact key from your trace
+        details = row.get("Product_Services_Details", "N/A").strip()
+        lines.append(f"{i}. {details}")
+
     return "\n".join(lines)
  
  
@@ -5471,7 +5740,7 @@ def get_ipo_product_services(co_code: int) -> str:
     "REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
 ))
 def get_ipo_customer_details(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
     url = EP["ipo_customer_details"].format(co_code=val)
@@ -5494,55 +5763,72 @@ def get_ipo_customer_details(co_code: int) -> str:
  
  
 @mcp.tool(description=(
-    "Get IPO financial statements: total assets, total revenue, profit, total liabilities, "
-    "total expenditure, EBITDA, share capital. "
+    "Retrieves multi-year financial statements including Revenue, Profit, Assets, "
+    "and EBITDA. Essential for fundamental analysis and CAGR calculations. "
     "report_type: 'S' for Standalone, 'C' for Consolidated. "
     "REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
 ))
 def get_ipo_financials(co_code: int, report_type: str = "S") -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    """
+    Args:
+        co_code: CMOTS Company Code.
+        report_type: 'S' (Standalone) or 'C' (Consolidated).
+    """
+    # STRICTLY PRESERVING REQUIRED VALIDATION LOGIC
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
+        
     rt = report_type.upper()
     if rt not in ("S", "C"):
         return "report_type must be 'S' (Standalone) or 'C' (Consolidated)."
+        
     url = EP["ipo_financials"].format(co_code=val, report_type=rt)
     label = "Standalone" if rt == "S" else "Consolidated"
-    data, err = _get(url, f"IPOFinancials[{val}/{rt}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No IPO financial data found."
- 
-    lines = [f"IPO Financials ({label}) — co_code {val}"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "co_code", "yrc", "sect_name",
-            "totalassets", "totalrevenue", "profit",
-            "TotalLiabilities", "TotalExpenditure",
-            "ebitda", "sharecapital",
-        ])
-        lines.append(
-            f"\n  {i:>2}. FY: {p.get('yrc', 'N/A')}  |  Sector: {p.get('sect_name', 'N/A')}"
-            f"\n      Total Assets     : {p.get('totalassets', 'N/A')}"
-            f"\n      Total Revenue    : {p.get('totalrevenue', 'N/A')}"
-            f"\n      Profit           : {p.get('profit', 'N/A')}"
-            f"\n      Total Liabilities: {p.get('TotalLiabilities', 'N/A')}"
-            f"\n      Total Expenditure: {p.get('TotalExpenditure', 'N/A')}"
-            f"\n      EBITDA           : {p.get('ebitda', 'N/A')}"
-            f"\n      Share Capital    : {p.get('sharecapital', 'N/A')}"
-        )
+    
+    response_data, err = _get(url, f"IPOFinancials[{val}/{rt}]")
+    
+    if err or not response_data.get("success"):
+        return f"Error fetching {label} financials for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return f"No {label} financial data found for this company."
+
+    lines = [f"## 📊 IPO Financial Statements ({label}): Code {val}", "---"]
+    
+    for row in data:
+        # Extracting year and normalizing the mixed casing from the trace
+        year_raw = row.get("yrc", 0)
+        year_str = str(int(year_raw))[:4] if year_raw else "N/A"
+        
+        # Financial Metrics
+        rev = row.get("TotalRevenue", row.get("totalrevenue", 0))
+        pat = row.get("Profit", row.get("profit", 0))
+        assets = row.get("TotalAssets", row.get("totalassets", 0))
+        exp = row.get("TotalExpenditure", row.get("totalexpenditure", 0))
+        ebitda = row.get("ebitda", 0)
+
+        lines.append(f"### Fiscal Year {year_str}")
+        lines.append(f"| Metric | Value (₹ Cr) |")
+        lines.append(f"| :--- | :--- |")
+        lines.append(f"| **Total Revenue** | {rev:,.2f} |")
+        lines.append(f"| **Total Expenditure** | {exp:,.2f} |")
+        lines.append(f"| **EBITDA** | {ebitda:,.2f} |")
+        lines.append(f"| **Profit After Tax (PAT)** | **{pat:,.2f}** |")
+        lines.append(f"| **Total Assets** | {assets:,.2f} |")
+        lines.append("")
+
     return "\n".join(lines)
  
- 
+
 @mcp.tool(description=(
     "Get IPO anchor investor details: bid date, shares offered to anchors, "
     "anchor portion size (₹ cr), and lock-in period breakdown (30-day and 90-day). "
     "REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
 ))
 def get_ipo_anchor_investor_details(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
     url = EP["anchor_investor_details"].format(co_code=val)
@@ -5573,97 +5859,124 @@ def get_ipo_anchor_investor_details(co_code: int) -> str:
  
  
 @mcp.tool(description=(
-    "Get objects/use of proceeds of an IPO from the prospectus. "
+    "Retrieves the 'Use of Proceeds' or Objects of the Issue from the prospectus. "
+    "Explains exactly what the company will do with the money raised. "
     "REQUIRES co_code from get_ipo_master / resolve_nse_symbol."
 ))
 def get_ipo_objects_of_issue(co_code: int) -> str:
-    val, err = _require_int(co_code, "co_code", "get_ipo_master")
+    """
+    Args:
+        co_code: CMOTS Company Code.
+    """
+    # STRICTLY PRESERVING YOUR REQUIRED VALIDATION LOGIC
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
     if err:
         return err
+        
     url = EP["objects_of_issue"].format(co_code=val)
-    data, err = _get(url, f"ObjectsOfIssue[{val}]")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No objects of issue data found."
+    response_data, err = _get(url, f"ObjectsOfIssue[{val}]")
+    
+    # Handling the case where data is not available (as seen in your first trace)
+    if err or not response_data.get("success"):
+        return f"Objects of the issue data is currently not available for code {val}."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No specific objects of the issue listed for this company."
  
-    lines = [f"Objects of the Issue — co_code {val}"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, ["project"])
-        lines.append(f"  {i:>2}. {p.get('project', 'N/A')}")
+    lines = [f"## 🎯 Objects of the Issue (Use of Proceeds): Code {val}", "---"]
+    lines.append("The company intends to utilize the net proceeds for the following:")
+    
+    for i, row in enumerate(data, 1):
+        # Extracting the project description from the trace
+        project = row.get("project", "N/A").strip()
+        lines.append(f"{i}. **{project}**")
+        
     return "\n".join(lines)
- 
- 
+
 @mcp.tool(description=(
-    "Get IPOs where basis of allotment has been finalised. "
-    "Returns company name, issue type, close date, and allotment reference. "
-    "count: number of records to fetch (default 10)."
+    "Retrieves a list of IPOs that have recently finalized their 'Basis of Allotment'. "
+    "Use this to confirm when the share allocation process is complete for a specific issue. "
+    "Returns company name, issue type, and regulatory volume references."
 ))
 def get_basis_of_allotment(count: int = 10) -> str:
+    """
+    Args:
+        count: Number of recent allotment finalizations to fetch.
+    """
     url = EP["basis_of_allotment"].format(n=count)
-    data, err = _get(url, "BasisOfAllotment")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No basis of allotment data found."
- 
-    lines = [f"Basis of Allotment — {len(rows)} records:"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "co_code",
-            "IssueType",
-            "ClosDate",
-            "VOLYR",
-            "VOLSRNO",
-            "ba",
-            "lname",
-        ])
+    response_data, err = _get(url, "BasisOfAllotment")
+    
+    if err or not response_data.get("success"):
+        return "Error fetching the basis of allotment records."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No recent basis of allotment finalizations found."
+
+    lines = [f"## ⚖️ Basis of Allotment Finalized ({len(data)} records)", "---"]
+    lines.append("The following companies have completed their share allocation process:")
+    
+    for i, row in enumerate(data, 1):
+        # Extracting identifying info from the trace
+        name = row.get("lname", "N/A")
+        code = row.get("co_code", "N/A")
+        issue_type = row.get("IssueType", "N/A")
+        
+        # Formatting the Close Date for readability
+        close_dt = str(row.get("ClosDate", ""))[:10] if row.get("ClosDate") else "N/A"
+        
         lines.append(
-            f"\n  {i:>2}. [{p.get('co_code', 'N/A')}] {p.get('lname', 'N/A')}  "
-            f"[{p.get('IssueType', 'N/A')}]"
-            f"\n      Close Date: {str(p.get('ClosDate', ''))[:10]}  |  "
-            f"Vol/Yr: {p.get('VOLYR', 'N/A')}  |  Vol SrNo: {p.get('VOLSRNO', 'N/A')}"
-            f"\n      BA: {p.get('ba', 'N/A')}"
+            f"### {i}. {name} (Code: {code})\n"
+            f"*   **Type:** {issue_type}\n"
+            f"*   **Issue Closed On:** {close_dt}\n"
+            f"*   **Regulatory Ref:** Volume {row.get('VOLYR', 'N/A')} | SrNo {row.get('VOLSRNO', 'N/A')}\n"
+            f"*   **Allotment Status:** ✅ Finalized"
         )
+        lines.append("")
+        
     return "\n".join(lines)
- 
  
 @mcp.tool(description=(
-    "Get IPO company logos list with company name, issue type, open/close/list dates, "
-    "and logo image filename. Useful for building IPO dashboards or UI."
+    "Retrieves a list of IPOs along with their official company logo URLs and key dates. "
+    "Essential for building visual dashboards, mobile UI, or investor tear-sheets. "
+    "Returns company name, issue type, and full logo image links."
 ))
 def get_ipo_logos() -> str:
+    """
+    Fetches logo URLs and basic IPO metadata.
+    """
     url = EP["ipo_logo"]
-    data, err = _get(url, "IPOCompanyLogo")
-    if err:
-        return err
-    rows = _rows(data)
-    if not rows:
-        return "No IPO logo data found."
- 
-    lines = [f"IPO Company Logos — {len(rows)} records:"]
-    for i, row in enumerate(rows, 1):
-        p = _pick(row, [
-            "co_code",
-            "companyname",
-            "issuetype",
-            "opendate",
-            "closedate",
-            "listdate",
-            "logoimagename",
-        ])
+    response_data, err = _get(url, "IPOCompanyLogo")
+    
+    if err or not response_data.get("success"):
+        return "Error fetching IPO company logo data."
+        
+    data = response_data.get("data", [])
+    if not data:
+        return "No IPO logo records currently available."
+
+    lines = [f"## 🖼️ IPO Visual Registry ({len(data)} records)", "---"]
+    lines.append("Active and forthcoming IPOs with available brand assets:")
+    
+    for i, row in enumerate(data, 1):
+        # Extracting identifying info from the trace
+        name = row.get("companyname", "N/A")
+        code = row.get("co_code", "N/A")
+        logo_url = row.get("logoimagename", "N/A")
+        
+        # Clean Date Extraction
+        def fmt_dt(key): return str(row.get(key, ""))[:10] if row.get(key) else "TBA"
+
         lines.append(
-            f"  {i:>3}. [{p.get('co_code', 'N/A')}] {p.get('companyname', 'N/A')}  "
-            f"[{p.get('issuetype', 'N/A')}]"
-            f"  |  Open: {str(p.get('opendate', ''))[:10]}"
-            f"  |  Close: {str(p.get('closedate', ''))[:10]}"
-            f"  |  List: {str(p.get('listdate', ''))[:10]}"
-            f"  |  Logo: {p.get('logoimagename', 'N/A')}"
+            f"### {i}. {name} (Code: {code})\n"
+            f"*   **Issue Type:** {row.get('issuetype', 'N/A')}\n"
+            f"*   **Timeline:** Open: {fmt_dt('opendate')} | Close: {fmt_dt('closedate')} | List: {fmt_dt('listdate')}\n"
+            f"*   **Brand Asset:** [View Logo]({logo_url})"
         )
+        lines.append("")
+        
     return "\n".join(lines)
- 
 
 
 
