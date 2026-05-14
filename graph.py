@@ -1952,80 +1952,143 @@ def _strip_markdown(text: str) -> str:
 #     of Reliance") → still 1 intent; downstream tool-selection handles it.
 # ══════════════════════════════════════════════════════════════════════════════
 
+# CLASSIFY_EXTRACT_DECOMPOSE_PROMPT = """\
+# You are a financial query analyzer for an Indian stock-market assistant.
+
+# ## Conversation history (last 4 turns)
+# {history}
+
+# ## Today's date
+# {today}
+
+# ## User query
+# "{query}"
+
+# ────────────────────────────────────────────────────────────
+# STEP 1 — COUNT NAMED ENTITIES
+# List every distinct financial entity named in the query.
+# Do NOT invent entities. Do NOT split one entity into many intents.
+
+# Examples:
+#   "stock price of Reliance"              → 1 entity: Reliance
+#   "NAV of Parag Parikh and Axis Bluechip"→ 2 entities: Parag Parikh Flexi Cap, Axis Bluechip
+#   "key ratios of Reliance, NAV of SBI Multicap and Axis Bluechip" → 3 entities
+#   "what is PE ratio"                     → 0 entities (general question)
+
+# STEP 2 — PRODUCE OUTPUT JSON (one intent per entity found in STEP 1)
+
+# Return ONLY valid JSON:
+# {{
+#   "query_type": "<greeting|general|stock|mf_scheme|mf_amc|comparison|investment>",
+#   "is_broad":   <true|false>,
+#   "mcp_needed": <true|false>,
+#   "intents": [
+#     {{
+#       "entity":             "<name exactly as written in query>",
+#       "entity_type":        "<stock|mf_scheme|mf_amc|etf|index|general>",
+#       "intent_description": "<specific data needed, e.g. 'stock price of Reliance'>",
+#       "scheme_name":        "<if mf_scheme, else empty string>",
+#       "amc_name":           "<if mf_amc, else empty string>",
+#       "nse_symbol":         "<NSE ticker if known, else empty string>"
+#     }}
+#   ]
+# }}
+
+# ────────────────────────────────────────────────────────────
+# ENTITY TYPE RULES (apply in order, stop at first match):
+# 1. "SBI Mutual Fund", "HDFC AMC", "Mirae Asset", "Nippon AMC", "Kotak MF",
+#    "Axis AMC", "ICICI Prudential AMC", "Franklin Templeton", "DSP"
+#    → entity_type = mf_amc.  NEVER etf.  NEVER mf_scheme.
+# 2. Name ending in "Fund", "Scheme", "Plan", or known scheme names like
+#    "Parag Parikh Flexi Cap", "Axis Bluechip", "SBI Small Cap Fund"
+#    → entity_type = mf_scheme.
+# 3. entity_type = etf ONLY when the word "ETF" appears explicitly in the query.
+# 4. "Reliance", "TCS", "HDFC Bank", "Infosys", "Wipro" → entity_type = stock.
+# 5. "Nifty 50", "Sensex", "Bank Nifty" → entity_type = index.
+# 6. General knowledge questions with no entity → entity_type = general.
+
+# INTENT COUNT RULES (CRITICAL — violations cause downstream errors):
+# • len(intents) MUST equal the number of distinct entities you found in STEP 1.
+# • If 0 entities → intents = [] and query_type = "general" or "greeting".
+# • If 1 entity  → intents has exactly 1 item. NEVER split into 2.
+# • If N entities → intents has exactly N items, one per entity.
+# • A query asking for multiple data points on ONE entity (e.g. "PE and EPS
+#   of Reliance") → still 1 intent. The tool layer will fetch both fields.
+# • NEVER create an intent for an entity not present in the query.
+
+# mcp_needed RULES:
+# • true  when any entity is a stock, mf_scheme, mf_amc, or etf.
+# • false for greetings and pure general/educational questions.
+
+# NEGATIVE EXAMPLES (do NOT do these):
+#   ✗ "stock price of Reliance" → 2 intents (wrong: only 1 entity)
+#   ✗ Inventing "SBI Bluechip ETF" when user said "SBI Mutual Fund"
+#   ✗ Splitting "PE ratio and revenue of TCS" into 2 intents
+# ────────────────────────────────────────────────────────────
+# """
+
+
 CLASSIFY_EXTRACT_DECOMPOSE_PROMPT = """\
-You are a financial query analyzer for an Indian stock-market assistant.
+You are a Lead Financial Systems Analyst for an Indian stock-market assistant. Your task is to decompose user queries into executable data intents.
 
-## Conversation history (last 4 turns)
-{history}
-
-## Today's date
-{today}
-
-## User query
-"{query}"
+## Context
+- History: {history}
+- Today's Date: {today}
+- Query: "{query}"
 
 ────────────────────────────────────────────────────────────
-STEP 1 — COUNT NAMED ENTITIES
-List every distinct financial entity named in the query.
-Do NOT invent entities. Do NOT split one entity into many intents.
+STEP 1: SUBJECT IDENTIFICATION
+Identify every distinct subject the user is asking about. A subject is either:
+1. A Specific Entity: (e.g., Reliance Industries, HDFC AMC, Nifty 50, SBI Small Cap Fund).
+2. A Market Category/Concept: (e.g., "upcoming IPOs", "top gainers", "market news", "bulk deals").
 
-Examples:
-  "stock price of Reliance"              → 1 entity: Reliance
-  "NAV of Parag Parikh and Axis Bluechip"→ 2 entities: Parag Parikh Flexi Cap, Axis Bluechip
-  "key ratios of Reliance, NAV of SBI Multicap and Axis Bluechip" → 3 entities
-  "what is PE ratio"                     → 0 entities (general question)
+Example Decomposition:
+- "Price of Reliance and upcoming IPOs" 
+  -> Subject 1: Reliance (Entity)
+  -> Subject 2: Upcoming IPOs (Concept)
 
-STEP 2 — PRODUCE OUTPUT JSON (one intent per entity found in STEP 1)
+STEP 2: JSON GENERATION
+Generate exactly one intent item for every subject identified in Step 1.
 
 Return ONLY valid JSON:
 {{
   "query_type": "<greeting|general|stock|mf_scheme|mf_amc|comparison|investment>",
-  "is_broad":   <true|false>,
+  "is_broad": <true|false>,
   "mcp_needed": <true|false>,
   "intents": [
     {{
-      "entity":             "<name exactly as written in query>",
-      "entity_type":        "<stock|mf_scheme|mf_amc|etf|index|general>",
-      "intent_description": "<specific data needed, e.g. 'stock price of Reliance'>",
-      "scheme_name":        "<if mf_scheme, else empty string>",
-      "amc_name":           "<if mf_amc, else empty string>",
-      "nse_symbol":         "<NSE ticker if known, else empty string>"
+      "entity": "<entity name OR market concept name>",
+      "entity_type": "<stock|mf_scheme|mf_amc|etf|index|general>",
+      "intent_description": "<specific data point needed for this subject>",
+      "scheme_name": "<if mf_scheme, else empty>",
+      "amc_name": "<if mf_amc, else empty>",
+      "nse_symbol": "<NSE ticker if known, else empty>"
     }}
   ]
 }}
 
 ────────────────────────────────────────────────────────────
-ENTITY TYPE RULES (apply in order, stop at first match):
-1. "SBI Mutual Fund", "HDFC AMC", "Mirae Asset", "Nippon AMC", "Kotak MF",
-   "Axis AMC", "ICICI Prudential AMC", "Franklin Templeton", "DSP"
-   → entity_type = mf_amc.  NEVER etf.  NEVER mf_scheme.
-2. Name ending in "Fund", "Scheme", "Plan", or known scheme names like
-   "Parag Parikh Flexi Cap", "Axis Bluechip", "SBI Small Cap Fund"
-   → entity_type = mf_scheme.
-3. entity_type = etf ONLY when the word "ETF" appears explicitly in the query.
-4. "Reliance", "TCS", "HDFC Bank", "Infosys", "Wipro" → entity_type = stock.
-5. "Nifty 50", "Sensex", "Bank Nifty" → entity_type = index.
-6. General knowledge questions with no entity → entity_type = general.
+DECOMPOSITION RULES (CRITICAL):
+1. THE 1:1 MAPPING: len(intents) MUST equal the number of subjects identified in Step 1. 
+2. NO BUNDLING: If a query asks for two different subjects (e.g., a stock price and a market trend), you MUST return two separate intent objects.
+3. ENTITY TYPE ASSIGNMENT:
+   - "Reliance", "TCS", "HDFC Bank" -> entity_type = stock
+   - "SBI Mutual Fund", "Nippon AMC" -> entity_type = mf_amc
+   - "Parag Parikh Flexi Cap", "Axis Bluechip" -> entity_type = mf_scheme
+   - "Nifty 50", "Sensex" -> entity_type = index
+   - Concepts like "IPOs", "Gainers", or "Educational definitions" -> entity_type = general
+4. DATA POINT MERGING: If a user asks for multiple metrics on the SAME entity (e.g., "PE, EPS, and Revenue of Reliance"), return ONE intent for Reliance. The intent_description should list all metrics.
 
-INTENT COUNT RULES (CRITICAL — violations cause downstream errors):
-• len(intents) MUST equal the number of distinct entities you found in STEP 1.
-• If 0 entities → intents = [] and query_type = "general" or "greeting".
-• If 1 entity  → intents has exactly 1 item. NEVER split into 2.
-• If N entities → intents has exactly N items, one per entity.
-• A query asking for multiple data points on ONE entity (e.g. "PE and EPS
-  of Reliance") → still 1 intent. The tool layer will fetch both fields.
-• NEVER create an intent for an entity not present in the query.
+MCP_NEEDED LOGIC:
+- Set to true if ANY intent requires fetching data from the live market, database, or external tools (Prices, IPO lists, NAVs, etc.).
 
-mcp_needed RULES:
-• true  when any entity is a stock, mf_scheme, mf_amc, or etf.
-• false for greetings and pure general/educational questions.
-
-NEGATIVE EXAMPLES (do NOT do these):
-  ✗ "stock price of Reliance" → 2 intents (wrong: only 1 entity)
-  ✗ Inventing "SBI Bluechip ETF" when user said "SBI Mutual Fund"
-  ✗ Splitting "PE ratio and revenue of TCS" into 2 intents
+NEGATIVE EXAMPLES (DO NOT DO THESE):
+✗ User: "Price of Reliance and IPOs" -> 1 intent (Wrong: Market concepts are separate subjects)
+✗ User: "How is the market today?" -> entity_type = stock (Wrong: This is an index or general query)
+✗ User: "PE of TCS and EPS of Wipro" -> 1 intent (Wrong: These are two distinct entities)
 ────────────────────────────────────────────────────────────
 """
+
 
 
 def node_classify_extract_and_decompose(state: AgentState) -> AgentState:
