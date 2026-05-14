@@ -1072,6 +1072,165 @@ async def _run_query_with_session(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Multi-intent single-session runner  (v10.3)
+#
+# All intents are passed as a combined query. The system prompt enumerates
+# every entity + its intent so the LLM can call tools for all of them in
+# one agentic loop. Results are tagged by entity_label so we can split
+# them back after the loop.
+# ══════════════════════════════════════════════════════════════════════════════
+
+MAX_CHARS_PER_INTENT = 3000   # hard cap per intent result before synthesis
+MAX_TOTAL_CHARS      = 10000  # hard cap for combined result passed to synthesis
+
+
+def _build_multi_intent_query(intents: list[dict]) -> str:
+    """
+    Build a single enriched query string containing all intent blocks.
+    Each block is a <PRE_RESOLVED> section tagged with Entity N so the
+    registry parser picks them up, plus a plain-language instruction.
+    """
+    lines = ["<PRE_RESOLVED>"]
+    for i, intent in enumerate(intents, 1):
+        codes = intent.get("resolved_codes") or {}
+        et    = intent.get("entity_type", "general")
+        name  = intent.get("entity", f"entity_{i}")
+        hint  = intent.get("tool_hint", "")
+        desc  = intent.get("intent_description", "")
+
+        lines.append(f"Entity {i}: {name}")
+        lines.append(f"  entity_type={et}")
+        if desc:
+            lines.append(f"  query_intent={desc}")
+        if hint:
+            lines.append(f"  recommended_tool={hint}")
+        for param, val in codes.items():
+            lines.append(f"  {param}={val}")
+
+        scheme = intent.get("scheme_name") or ""
+        amc    = intent.get("amc_name") or ""
+        if scheme:
+            lines.append(f"  scheme_name={scheme}")
+        if amc:
+            lines.append(f"  amc_name={amc}")
+
+    lines.append("</PRE_RESOLVED>")
+    lines.append("")
+    lines.append("User Query: Answer ALL of the following sub-questions:")
+    for i, intent in enumerate(intents, 1):
+        name = intent.get("entity", f"entity_{i}")
+        desc = intent.get("intent_description", "")
+        lines.append(f"  {i}. [{name}] {desc}")
+
+    return "\n".join(lines)
+
+
+def _trim_results_to_budget(
+    intent_results: list[dict],
+    max_per_intent: int = MAX_CHARS_PER_INTENT,
+    max_total:      int = MAX_TOTAL_CHARS,
+) -> list[dict]:
+    """
+    Trim mcp_result strings so the combined payload fed to synthesis
+    stays within token budget. Trims longest result first.
+    """
+    results = [dict(r) for r in intent_results]
+
+    # Per-intent cap first
+    for r in results:
+        if len(r.get("mcp_result", "")) > max_per_intent:
+            r["mcp_result"] = (
+                r["mcp_result"][:max_per_intent]
+                + f"\n... [trimmed to {max_per_intent} chars]"
+            )
+
+    # Total cap — trim the longest until we're under budget
+    while sum(len(r.get("mcp_result", "")) for r in results) > max_total:
+        longest = max(results, key=lambda r: len(r.get("mcp_result", "")))
+        current = longest["mcp_result"]
+        if len(current) <= 200:
+            break  # nothing useful left to trim
+        longest["mcp_result"] = current[: len(current) - 500] + "\n... [trimmed]"
+
+    return results
+
+
+async def _run_all_intents_with_session(
+    intents: list[dict],
+    session: ClientSession,
+    backend: str,
+) -> list[dict]:
+    """
+    Run ALL intents in a single MCP session.
+
+    Returns the same list with mcp_result populated per intent.
+    Results are tagged [entity_label / intent_description] in the raw
+    tool output, and we split them back by searching for those tags.
+    """
+    combined_query = _build_multi_intent_query(intents)
+
+    # Reuse the existing session runner — it already handles multi-entity
+    # via _EntityRegistry (parses all Entity N: blocks) and entity_label
+    # tagging in tool calls.
+    raw_result = await _run_query_with_session(combined_query, session, backend)
+
+    # ── Partition results back to each intent ────────────────────────────
+    # Strategy: look for per-entity tags the LLM or tool output may include.
+    # If we can't split cleanly, assign the full result to all intents
+    # (synthesis prompt already handles duplication gracefully).
+
+    updated = [dict(i) for i in intents]
+
+    # Try to find entity-specific sections in the raw result
+    # The LLM is prompted to label its responses; tool results are tagged
+    # with [tool_name] blocks from all_tool_results in _run_query_with_session.
+    for idx, intent in enumerate(updated):
+        name = intent.get("entity", "")
+        # Look for a section that mentions this entity
+        pattern = re.compile(
+            rf"(?:^|\n)(?:\[{re.escape(name)}[^\]]*\]|\*\*{re.escape(name)}"
+            rf"|\b{re.escape(name)}\b.{{0,60}}:)(.*?)(?=\n\[|\n\*\*|\Z)",
+            re.S | re.I,
+        )
+        m = pattern.search(raw_result)
+        if m and m.group(1).strip():
+            intent["mcp_result"] = m.group(1).strip()
+        else:
+            # Fallback: give every intent the full result;
+            # synthesis will extract what's relevant
+            intent["mcp_result"] = raw_result
+
+    return updated
+
+
+async def run_mcp_query_multi(
+    intents: list[dict],
+    backend: Optional[str] = None,
+) -> list[dict]:
+    """
+    Public async entry point for multi-intent single-session calls.
+    Called by graph.py's node_mcp_tool_call_intents when len(intents) > 0.
+
+    Parameters
+    ----------
+    intents : List of IntentItem dicts (with resolved_codes already filled).
+    backend : "groq" or "ollama". Defaults to LLM_BACKEND env var.
+
+    Returns
+    -------
+    The same list with mcp_result populated on each item.
+    """
+    b             = (backend or LLM_BACKEND).lower()
+    server_params = StdioServerParameters(command="python", args=[str(SERVER_SCRIPT)])
+
+    async with stdio_client(server_params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            results = await _run_all_intents_with_session(intents, session, b)
+
+    return _trim_results_to_budget(results)
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Public API
 # ══════════════════════════════════════════════════════════════════════════════
 

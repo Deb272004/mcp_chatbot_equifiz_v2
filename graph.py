@@ -1875,16 +1875,43 @@ class AgentState(TypedDict, total=False):
 # ── LLM helpers ───────────────────────────────────────────────────────────────
 
 def _llm_json(prompt: str) -> dict:
+    """
+    Robust JSON extractor for LLM responses. 
+    Handles markdown blocks, trailing commas, and single-quote issues.
+    """
     resp = llm.invoke([HumanMessage(content=prompt)])
     text = resp.content.strip()
-    text = re.sub(r"^```(?:json)?|```$", "", text, flags=re.MULTILINE).strip()
+
+    # 1. Strip Markdown code blocks if they exist
+    clean_text = re.sub(r"^```(?:json)?|```$", "", text, flags=re.MULTILINE).strip()
+
+    # 2. Try standard parsing immediately
     try:
-        return json.loads(text)
+        return json.loads(clean_text)
     except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if match:
-            return json.loads(match.group())
-        raise ValueError(f"Could not parse JSON from LLM: {text[:300]}")
+        pass 
+
+    # 3. Greedy Extraction: Find the outermost curly braces
+    # This ignores preamble like "Here is your JSON:"
+    match = re.search(r"(\{.*\})", clean_text, re.DOTALL)
+    if match:
+        greedy_text = match.group(1)
+        try:
+            return json.loads(greedy_text)
+        except json.JSONDecodeError:
+            # 4. Final Fallbacks for common LLM syntax errors
+            try:
+                # Replace single quotes with double quotes (common in small models)
+                # Fix trailing commas before closing braces/brackets
+                fixed_text = greedy_text.replace("'", '"')
+                fixed_text = re.sub(r",\s*([\]}])", r"\1", fixed_text) 
+                return json.loads(fixed_text)
+            except:
+                pass
+
+    # If all fails, log the raw text for debugging and raise
+    logger.error(f"[JSON FAIL] Raw LLM Output: {text}")
+    raise ValueError(f"Could not parse JSON from LLM response. Check logs.")
 
 
 def _llm_text(prompt: str) -> str:
@@ -2766,11 +2793,105 @@ def _run_mcp_in_new_loop(enriched_query: str) -> str:
 # Node MTCI: MCP Tool Call — per Intent (unchanged from v10.1)
 # ══════════════════════════════════════════════════════════════════════════════
 
+# def node_mcp_tool_call_intents(state: AgentState) -> AgentState:
+#     console.print("[Node MTCI] Per-intent MCP tool call (v10.1)")
+
+#     try:
+#         from mcp_client import run_mcp_query  # noqa: F401
+#     except ImportError:
+#         console.print("MCP client module not found.")
+#         state["mcp_raw_result"] = ""
+#         state["intent_results"] = []
+#         state["error"]          = "mcp_client_not_found"
+#         return state
+
+#     intents    = state.get("intents") or []
+#     user_query = state.get("user_query", "")
+
+#     if not intents:
+#         console.print("  ⚠ No intents; falling back to raw user query")
+#         intents = [IntentItem(
+#             entity             = "",
+#             entity_type        = "general",
+#             intent_description = user_query,
+#             tool_hint          = state.get("mcp_tool_hint", ""),
+#             matched_tools      = [],
+#             resolved_codes     = state.get("mcp_resolved_codes") or {},
+#             mcp_result         = "",
+#         )]
+
+#     def _call_intent(intent: IntentItem) -> IntentItem:
+#         injection = _build_injection_block_for_intent(intent)
+#         sub_query = intent.get("intent_description") or user_query
+
+#         enriched  = f"{injection}\nUser Query: {sub_query}" if injection else sub_query
+#         tool_hint = intent.get("tool_hint", "")
+#         if tool_hint:
+#             enriched += f"\n\n[RECOMMENDED TOOL: {tool_hint}]"
+
+#         console.print(
+#             f"  📤 Intent [{intent.get('entity', '?')}] "
+#             f"tool={tool_hint} query='{sub_query[:60]}'"
+#         )
+
+#         try:
+#             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+#                 future = ex.submit(_run_mcp_in_new_loop, enriched)
+#                 result = future.result(timeout=600)
+#             intent["mcp_result"] = result or "No data returned from server."
+#         except concurrent.futures.TimeoutError:
+#             intent["mcp_result"] = "MCP call timed out for this intent."
+#         except Exception as exc:
+#             intent["mcp_result"] = f"MCP call failed: {exc}"
+
+#         console.print(
+#             f"  📥 Intent [{intent.get('entity', '?')}] "
+#             f"→ {len(intent['mcp_result'])} chars"
+#             f"{intent['mcp_result'][:100]}"
+#         )
+#         return intent
+
+#     result_map: dict[int, IntentItem] = {}
+#     with ThreadPoolExecutor(max_workers=min(4, len(intents))) as ex:
+#         futures = {
+#             ex.submit(_call_intent, intent): idx
+#             for idx, intent in enumerate(intents)
+#         }
+#         for future in as_completed(futures):
+#             idx = futures[future]
+#             try:
+#                 result_map[idx] = future.result()
+#             except Exception as exc:
+#                 console.print(f"  [red]Intent #{idx} MCP call failed: {exc}[/red]")
+#                 result_map[idx] = intents[idx]
+
+#     state["intents"] = [result_map[i] for i in sorted(result_map)]
+
+#     state["intent_results"] = [
+#         {
+#             "entity":             intent.get("entity", ""),
+#             "entity_type":        intent.get("entity_type", ""),
+#             "intent_description": intent.get("intent_description", ""),
+#             "mcp_result":         intent.get("mcp_result", ""),
+#         }
+#         for intent in state["intents"]
+#     ]
+
+#     state["mcp_raw_result"] = "\n\n---\n\n".join(
+#         f"[{r['entity']} / {r['intent_description']}]\n{r['mcp_result']}"
+#         for r in state["intent_results"]
+#     )
+#     state["mcp_tool_calls_made"] = []
+#     state["error"]               = None
+
+#     return state
+
+
 def node_mcp_tool_call_intents(state: AgentState) -> AgentState:
-    console.print("[Node MTCI] Per-intent MCP tool call (v10.1)")
+    console.print("[Node MTCI] Single-session multi-intent MCP call (v10.3)")
 
     try:
-        from mcp_client import run_mcp_query  # noqa: F401
+        from mcp_client import run_mcp_query_multi
     except ImportError:
         console.print("MCP client module not found.")
         state["mcp_raw_result"] = ""
@@ -2781,73 +2902,52 @@ def node_mcp_tool_call_intents(state: AgentState) -> AgentState:
     intents    = state.get("intents") or []
     user_query = state.get("user_query", "")
 
+    # Fallback: no intents → synthesise from raw query (unchanged behaviour)
     if not intents:
-        console.print("  ⚠ No intents; falling back to raw user query")
-        intents = [IntentItem(
-            entity             = "",
-            entity_type        = "general",
-            intent_description = user_query,
-            tool_hint          = state.get("mcp_tool_hint", ""),
-            matched_tools      = [],
-            resolved_codes     = state.get("mcp_resolved_codes") or {},
-            mcp_result         = "",
-        )]
-
-    def _call_intent(intent: IntentItem) -> IntentItem:
-        injection = _build_injection_block_for_intent(intent)
-        sub_query = intent.get("intent_description") or user_query
-
-        enriched  = f"{injection}\nUser Query: {sub_query}" if injection else sub_query
-        tool_hint = intent.get("tool_hint", "")
-        if tool_hint:
-            enriched += f"\n\n[RECOMMENDED TOOL: {tool_hint}]"
-
-        console.print(
-            f"  📤 Intent [{intent.get('entity', '?')}] "
-            f"tool={tool_hint} query='{sub_query[:60]}'"
-        )
-
+        console.print("  ⚠ No intents; falling back to single raw query")
+        from mcp_client import run_mcp_query
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-                future = ex.submit(_run_mcp_in_new_loop, enriched)
-                result = future.result(timeout=600)
-            intent["mcp_result"] = result or "No data returned from server."
-        except concurrent.futures.TimeoutError:
-            intent["mcp_result"] = "MCP call timed out for this intent."
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            raw = loop.run_until_complete(run_mcp_query(user_query))
+            loop.close()
         except Exception as exc:
-            intent["mcp_result"] = f"MCP call failed: {exc}"
+            raw = f"MCP call failed: {exc}"
+        state["mcp_raw_result"]      = raw
+        state["intent_results"]      = []
+        state["mcp_tool_calls_made"] = []
+        state["error"]               = None
+        return state
 
-        console.print(
-            f"  📥 Intent [{intent.get('entity', '?')}] "
-            f"→ {len(intent['mcp_result'])} chars"
-            f"{intent['mcp_result'][:100]}"
-        )
-        return intent
+    # ── All intents → ONE server session ─────────────────────────────────
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            filled_intents = loop.run_until_complete(
+                run_mcp_query_multi(intents)
+            )
+        finally:
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.close()
+    except Exception as exc:
+        console.print(f"  [red]Multi-intent MCP failed: {exc}[/red]")
+        # Mark all intents as errored; synthesis will surface the error message
+        filled_intents = [
+            {**dict(i), "mcp_result": f"MCP call failed: {exc}"}
+            for i in intents
+        ]
 
-    result_map: dict[int, IntentItem] = {}
-    with ThreadPoolExecutor(max_workers=min(4, len(intents))) as ex:
-        futures = {
-            ex.submit(_call_intent, intent): idx
-            for idx, intent in enumerate(intents)
-        }
-        for future in as_completed(futures):
-            idx = futures[future]
-            try:
-                result_map[idx] = future.result()
-            except Exception as exc:
-                console.print(f"  [red]Intent #{idx} MCP call failed: {exc}[/red]")
-                result_map[idx] = intents[idx]
-
-    state["intents"] = [result_map[i] for i in sorted(result_map)]
+    state["intents"] = filled_intents
 
     state["intent_results"] = [
         {
-            "entity":             intent.get("entity", ""),
-            "entity_type":        intent.get("entity_type", ""),
-            "intent_description": intent.get("intent_description", ""),
-            "mcp_result":         intent.get("mcp_result", ""),
+            "entity":             i.get("entity", ""),
+            "entity_type":        i.get("entity_type", ""),
+            "intent_description": i.get("intent_description", ""),
+            "mcp_result":         i.get("mcp_result", ""),
         }
-        for intent in state["intents"]
+        for i in filled_intents
     ]
 
     state["mcp_raw_result"] = "\n\n---\n\n".join(
@@ -2857,6 +2957,10 @@ def node_mcp_tool_call_intents(state: AgentState) -> AgentState:
     state["mcp_tool_calls_made"] = []
     state["error"]               = None
 
+    console.print(
+        f"  ✅ {len(filled_intents)} intent(s) resolved in one session. "
+        f"Total result chars: {len(state['mcp_raw_result'])}"
+    )
     return state
 
 
@@ -2919,10 +3023,20 @@ def node_mcp_synthesis(state: AgentState) -> AgentState:
         )
         return state
 
+    mcp_snippet = state.get("mcp_raw_result", "")
+    # Hard cap so we never blow the LLM context window
+    if len(mcp_snippet) > 8000:
+        # Keep the first 6000 chars + last 1500 (tail often has final numbers)
+        mcp_snippet = (
+            mcp_snippet[:6000]
+            + "\n\n... [middle trimmed for length] ...\n\n"
+            + mcp_snippet[-1500:]
+        )
+
     prompt = MCP_SYNTHESIS_PROMPT.format(
         history    = _format_history(state),
         user_query = state.get("user_query", ""),
-        mcp_result = mcp_result[:4000],
+        mcp_result = mcp_snippet,
     )
     try:
         state["final_answer"] = _llm_text(prompt)
