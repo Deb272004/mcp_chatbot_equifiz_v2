@@ -1,59 +1,76 @@
+
+
 """
-Persistent doc store — replaces the in-memory dict in main.py.
-Stores uploaded document chunks in SQLite so they survive restarts.
+PostgreSQL-backed doc store.
+Replaces SQLite to consolidate data into the equifiz database.
 Each session can have at most one active document at a time.
 """
-import sqlite3
-import json
 import os
-import threading
+import json
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from typing import List, Optional
 
-DB_PATH = os.environ.get(
-    "SESSION_DB_PATH",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "sessions.db"),
-)
+# Database Configuration
+POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "5432")
+POSTGRES_DB   = os.environ.get("POSTGRES_DB", "equifiz")
+POSTGRES_USER = os.environ.get("POSTGRES_USER", "postgres")
+POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "1234")
 
-_lock = threading.Lock()
-
-
-def _conn() -> sqlite3.Connection:
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    con = sqlite3.connect(DB_PATH, check_same_thread=False)
-    con.row_factory = sqlite3.Row
-    return con
-
+def _get_connection():
+    """Creates a new PostgreSQL connection."""
+    return psycopg2.connect(
+        host=POSTGRES_HOST,
+        port=POSTGRES_PORT,
+        database=POSTGRES_DB,
+        user=POSTGRES_USER,
+        password=POSTGRES_PASSWORD,
+        cursor_factory=RealDictCursor
+    )
 
 def _init():
-    with _lock, _conn() as con:
-        con.execute("""
-            CREATE TABLE IF NOT EXISTS doc_store (
-                session_id TEXT PRIMARY KEY,
-                filename   TEXT NOT NULL,
-                chunks_json TEXT NOT NULL
-            )
-        """)
+    """Initializes the doc_store table in PostgreSQL."""
+    with _get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS doc_store (
+                    session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+                    filename   TEXT NOT NULL,
+                    chunks_json TEXT NOT NULL
+                )
+            """)
+        conn.commit()
 
-
+# Initialize on module load
 _init()
 
-
 def set_doc(session_id: str, filename: str, chunks: List[str]):
-    with _lock, _conn() as con:
-        con.execute(
-            "INSERT OR REPLACE INTO doc_store (session_id, filename, chunks_json) VALUES (?, ?, ?)",
-            (session_id, filename, json.dumps(chunks)),
-        )
-
+    """Stores or updates the document for a session."""
+    with _get_connection() as conn:
+        with conn.cursor() as cur:
+            # PostgreSQL equivalent of "INSERT OR REPLACE"
+            cur.execute("""
+                INSERT INTO doc_store (session_id, filename, chunks_json) 
+                VALUES (%s, %s, %s)
+                ON CONFLICT (session_id) 
+                DO UPDATE SET filename = EXCLUDED.filename, chunks_json = EXCLUDED.chunks_json
+            """, (session_id, filename, json.dumps(chunks)))
+        conn.commit()
 
 def get_doc(session_id: str) -> Optional[List[str]]:
-    with _lock, _conn() as con:
-        row = con.execute(
-            "SELECT chunks_json FROM doc_store WHERE session_id=?", (session_id,)
-        ).fetchone()
+    """Retrieves document chunks for a session."""
+    with _get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT chunks_json FROM doc_store WHERE session_id=%s", (session_id,)
+            )
+            row = cur.fetchone()
     return json.loads(row["chunks_json"]) if row else None
 
-
 def delete_doc(session_id: str):
-    with _lock, _conn() as con:
-        con.execute("DELETE FROM doc_store WHERE session_id=?", (session_id,))
+    """Removes a document from the store."""
+    with _get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM doc_store WHERE session_id=%s", (session_id,))
+        conn.commit()
