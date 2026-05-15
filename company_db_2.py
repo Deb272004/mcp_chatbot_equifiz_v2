@@ -18,7 +18,7 @@ load_dotenv()
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 
 BASE_URL  = "https://equifizapis.cmots.com/api"
-JWT_TOKEN = os.getenv("JWT_TOKEN", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImVxdWlmaXphcGlzIiwicm9sZSI6IkFkbWluIiwibmJmIjoxNzc2OTMyODcyLCJleHAiOjE4MDkxNjAwNzIsImlhdCI6MTc3NjkzMjg3MiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1MDE5MSIsImF1ZCI6Imh0dHA6Ly9sb2NhbGhvc3Q6NTAxOTEifQ.lz6do_yCsDQTFz5E-qi4w825YvjFY7lWv_l1qWG4W9I")
+EQUIFIZ_TOKEN= os.getenv("EQUIFIZ_TOKEN", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImVxdWlmaXphcGlzIiwicm9sZSI6IkFkbWluIiwibmJmIjoxNzc2OTMyODcyLCJleHAiOjE4MDkxNjAwNzIsImlhdCI6MTc3NjkzMjg3MiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1MDE5MSIsImF1ZCI6Imh0dHA6Ly9sb2NhbGhvc3Q6NTAxOTEifQ.lz6do_yCsDQTFz5E-qi4w825YvjFY7lWv_l1qWG4W9I")
 TIMEZONE  = "Asia/Kolkata"
 DB_CONFIG = {
     "host":     os.getenv("POSTGRES_HOST",     "localhost"),
@@ -149,7 +149,7 @@ def get_session():
 
 
 def fetch(session, url):
-    headers = {"Authorization": f"Bearer {JWT_TOKEN}"}
+    headers = {"Authorization": f"Bearer {EQUIFIZ_TOKEN}"}
     resp    = session.get(url, headers=headers, timeout=60)
     resp.raise_for_status()
     data = resp.json()
