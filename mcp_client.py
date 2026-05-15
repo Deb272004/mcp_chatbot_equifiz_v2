@@ -988,7 +988,7 @@ load_dotenv()
 # ── Config ──────────────────────────────────────────────────────────────────────
 
 SERVER_SCRIPT = Path(__file__).parent / "mf_equifiz_server.py"
-CHROMA_PATH   = Path(__file__).parent / "chroma_db"
+CHROMA_PATH   = Path(__file__).parent / "chroma_store"
 MAX_ROUNDS    = 15
 
 # Per-intent timeout in seconds.
