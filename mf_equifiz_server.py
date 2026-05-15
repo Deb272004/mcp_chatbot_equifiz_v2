@@ -1541,7 +1541,7 @@ def get_bse_announcements() -> str:
     lines.append("-" * 60)
 
     # Limiting to top 15 as in your original logic
-    for i, row in enumerate(rows[:15], 1):
+    for i, row in enumerate(rows[:10], 1):
         # Mapping to the keys in your image: lname, caption, date, etc.
         p = _pick(row, [
             "lname", 
@@ -1584,7 +1584,7 @@ def get_nse_announcements() -> str:
     lines.append("-" * 65)
 
     # Limiting to top 15 for concise context
-    for i, row in enumerate(rows[:15], 1):
+    for i, row in enumerate(rows[:10], 1):
         # Mapped to the keys in your provided image
         p = _pick(row, [
             "lname", 
@@ -1608,6 +1608,126 @@ def get_nse_announcements() -> str:
         if link:
             lines.append(f"      Link: {link}")
         lines.append("") # Spacer for readability
+
+    return "\n".join(lines)
+
+@mcp.tool(description=(
+    "Retrieves the latest corporate announcements from the Bombay Stock Exchange (BSE) "
+    "for a specific company by filtering the real-time feed. REQUIRES co_code."
+))
+def get_bse_company_announcements(co_code: int) -> str:
+    """
+    Args:
+        co_code: The numeric internal company identifier.
+    """
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
+    if err:
+        return err
+
+    # Reusing the global feed endpoint
+    data, err = _get(EP["bse_announcement"], "BSECompanyAnnouncement")
+    if err:
+        return err
+    
+    rows = _rows(data)
+    if not rows:
+        return "No BSE announcements found."
+        
+    header = f"### BSE Corporate Announcements for Company Code: {val}"
+    lines = [header, "---"]
+    match_count = 0
+
+    for row in rows:
+        # Local Filtering: Match against possible company code keys in the raw row data
+        row_co_code = row.get("co_code") or row.get("ccode") or row.get("sc_code")
+        
+        try:
+            if row_co_code and int(float(row_co_code)) == val:
+                p = _pick(row, ["lname", "symbol", "caption", "date", "fileurl", "typeofannouncement"])
+                
+                raw_date = str(p.get("date", ""))[:10]
+                name = p.get("lname", "N/A")
+                ticker = p.get("symbol", "")
+                headline = p.get("caption") or p.get("typeofannouncement", "No topic provided")
+                link = p.get("fileurl", "")
+
+                match_count += 1
+                stock_line = (
+                    f"{match_count}. **[{raw_date}] {name}** ({ticker})\n"
+                    f"   * **Topic:** {headline}"
+                )
+                if link:
+                    stock_line += f"\n   * **Document:** [View Announcement PDF]({link})"
+                lines.append(stock_line)
+                
+                # Cap at 10 relevant items so we don't hit context limits
+                if match_count >= 10:
+                    break
+        except (ValueError, TypeError):
+            continue
+
+    if match_count == 0:
+        return f"No recent BSE announcements found matching company code {val} in the active feed."
+
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Retrieves the latest corporate announcements from the National Stock Exchange (NSE) "
+    "for a specific company by filtering the real-time feed. REQUIRES co_code."
+))
+def get_nse_company_announcements(co_code: int) -> str:
+    """
+    Args:
+        co_code: The numeric internal company identifier.
+    """
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
+    if err:
+        return err
+
+    # Reusing the global feed endpoint
+    data, err = _get(EP["nse_announcement"], "NSECompanyAnnouncement")
+    if err:
+        return err
+    
+    rows = _rows(data)
+    if not rows:
+        return "No NSE announcements found."
+        
+    header = f"### NSE Corporate Announcements for Company Code: {val}"
+    lines = [header, "---"]
+    match_count = 0
+
+    for row in rows:
+        # Local Filtering: Match against possible company code keys in the raw row data
+        row_co_code = row.get("co_code") or row.get("ccode")
+        
+        try:
+            if row_co_code and int(float(row_co_code)) == val:
+                p = _pick(row, ["lname", "symbol", "caption", "date", "fileurl", "Subject"])
+                
+                raw_date = str(p.get("date", ""))[:10]
+                name = p.get("lname", "N/A")
+                ticker = p.get("symbol", "N/A")
+                headline = p.get("Subject") or p.get("caption", "No subject provided")
+                link = p.get("fileurl", "")
+
+                match_count += 1
+                stock_line = (
+                    f"{match_count}. **[{raw_date}] {name}** ({ticker})\n"
+                    f"   * **Subject:** {headline}"
+                )
+                if link:
+                    stock_line += f"\n   * **Document:** [View Announcement PDF]({link})"
+                lines.append(stock_line)
+                
+                if match_count >= 10:
+                    break
+        except (ValueError, TypeError):
+            continue
+
+    if match_count == 0:
+        return f"No recent NSE announcements found matching company code {val} in the active feed."
 
     return "\n".join(lines)
 

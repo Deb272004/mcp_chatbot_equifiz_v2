@@ -101,3 +101,48 @@ async def index_tools():
 
 if __name__ == "__main__":
     asyncio.run(index_tools())
+
+
+
+# import os
+# from pathlib import Path
+# import chromadb
+
+# # --- Configuration ---
+# # Point this to your actual chroma_store folder path
+# CHROMA_PATH = Path(__file__).parent / "chroma_store"
+# COLLECTION_TO_DELETE = "equifiz_tools"
+
+# def delete_chroma_collection(collection_name: str, db_path: Path):
+#     """
+#     Safely connects to the persistent ChromaDB store and deletes a specified collection.
+#     """
+#     print(f"🔍 Checking database at: {db_path.resolve()}")
+    
+#     if not db_path.exists():
+#         print(f"❌ Error: The directory '{db_path}' does not exist.")
+#         return
+
+#     try:
+#         # Initialize the persistent client pointing to your directory
+#         client = chromadb.PersistentClient(path=str(db_path))
+        
+#         # List all existing collections to verify its existence
+#         existing_collections = [col.name for col in client.list_collections()]
+#         print(f"📦 Found active collections: {existing_collections}")
+        
+#         if collection_name in existing_collections:
+#             print(f"🗑️ Deleting collection '{collection_name}'...")
+            
+#             # The official API method to drop a collection completely
+#             client.delete_collection(name=collection_name)
+            
+#             print(f"✅ Successfully deleted '{collection_name}' from the vector store.")
+#         else:
+#             print(f"ℹ️ Collection '{collection_name}' was not found in this database.")
+            
+#     except Exception as e:
+#         print(f"❌ An error occurred during deletion: {str(e)}")
+
+# if __name__ == "__main__":
+#     delete_chroma_collection(COLLECTION_TO_DELETE, CHROMA_PATH)
