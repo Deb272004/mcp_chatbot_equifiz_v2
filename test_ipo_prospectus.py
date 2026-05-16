@@ -75,7 +75,7 @@ def get_profit_and_loss_results():
     # Note: report_type is 'S' for Standalone, 'C' for Consolidated
     # https://equifizapis.cmots.com/api/ETFGetQuotes/NSE/INF789F1AUX7
     # https://equifizapis.cmots.com/api/ETFShareholdingEquity/INF373I01023
-    url = "https://equifizapis.cmots.com/api/MF_News/1632877"
+    url = "https://equifizapis.cmots.com/api/MacroEconomicData"
     
     print(f"Requesting: {url}\n")
     

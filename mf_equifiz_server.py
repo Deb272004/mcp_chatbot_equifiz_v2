@@ -556,6 +556,71 @@ def _resolve_index_code(query: str) -> int | None:
     return results[0]["indexcode"]
 
 
+
+# ── Bond cache ──────────────────────────────────────────────────────────────────
+
+_bond_cache: list[dict] = []
+
+def _load_bond_cache() -> list[dict]:
+    global _bond_cache
+    if _bond_cache:
+        return _bond_cache
+    try:
+        conn = _db()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT code, companyname, isin, nsesymbol FROM bond_master")
+            _bond_cache = [dict(r) for r in cur.fetchall()]
+        conn.close()
+    except Exception as e:
+        logger.error("Bond cache load failed: %s", e)
+    return _bond_cache
+
+
+def _fuzzy_bond(
+    query: str,
+    limit: int = 5,
+    threshold: int = FUZZY_THRESHOLD,
+) -> list[dict]:
+    q       = query.strip()
+    q_lower = q.lower()
+    q_upper = q.upper()
+    scored: list[tuple[dict, int]] = []
+
+    for bond in _load_bond_cache():
+        code      = str(bond.get("code")        or "")
+        name      = (bond.get("companyname")     or "").lower()
+        isin      = (bond.get("isin")            or "").upper()
+        nsesymbol = (bond.get("nsesymbol")       or "").upper()
+
+        # Exact matches → short-circuit at 100
+        if q_upper == isin or q_upper == nsesymbol or q == code:
+            scored.append((bond, 100))
+            continue
+
+        score_name = max(
+            fuzz.token_set_ratio(q_lower, name),
+            fuzz.partial_ratio(q_lower, name),
+        )
+        score_sym  = fuzz.ratio(q_upper, nsesymbol)
+        score_isin = fuzz.ratio(q_upper, isin)
+
+        final = max(score_name, score_sym, score_isin)
+        if final >= threshold:
+            scored.append((bond, final))
+
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return [b for b, _ in scored[:limit]]
+
+
+def _resolve_bond_code(query: str) -> int | None:
+    results = _fuzzy_bond(query, limit=1)
+    if not results:
+        logger.warning("Could not resolve bond code from query: %r", query)
+        return None
+    return results[0]["code"]
+
+
+
 # ── API endpoint map ────────────────────────────────────────────────────────────
 
 EP = {
@@ -714,7 +779,16 @@ EP = {
     "etf_equity_holdings":f"{BASE_URL}/ETFShareHoldingEquity/{{isin}}",
     "get_etf_monthly_portfolio" : f"{BASE_URL}/ETFMonthlyPortfolioAllHoldings/{{isin}}",
     "get_etf_sector_allocation" :f"{BASE_URL}/ETFSectorAllocation/{{isin}}",
-    "get_etf_asset_allocation":f"{BASE_URL}/ETFAssetAllocation/{{isin}}"
+    "get_etf_asset_allocation":f"{BASE_URL}/ETFAssetAllocation/{{isin}}",
+
+#=====================bond =========================
+    "get_macro_economic_data":f"{BASE_URL}/MacroEconomicData",
+    "get_forthcoming_bond_ipo":f"{BASE_URL}/Forthcoming-Bond-IPO",
+    "get_open_bond_ipo" :f"{BASE_URL}/Open-Bond-IPO",
+    "get_debt_eod_prices_scripwise":f"{BASE_URL}/Debt-EODPrices-ScripWise/{{ex}}/{{bond_code}}",
+    "get_debt_top_value":f"{BASE_URL}/Debt-Top-Value/{{ex}}/{{record_count}}",
+    "get_debt_top_volume" : f"{BASE_URL}/Debt-Top-Volume/{{ex}}/{{record_count}}",
+    "get_debt_market_watch" : f"{BASE_URL}/Debt-Market-Watch/{{ex}}/{{record_count}}"
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -7658,6 +7732,348 @@ def get_etf_asset_allocation(isin: str) -> str:
 #===============================================================
 
 
+@mcp.tool(description=(
+    "Retrieves key debt market end-of-day metrics for BSE or NSE. "
+    "Provides a concise summary of price changes, face values, and liquidity."
+))
+def get_debt_market_watch(exchange: str = "BSE", record_count: int = 7) -> str:
+    try:
+        ex = _normalise_exchange(exchange)
+    except ValueError as e:
+        return str(e)
+        
+    url = EP["debt_market_watch"].format(ex=ex.upper(), record_count=record_count)
+    data, err = _get(url, f"DebtMarketWatch[{ex}]")
+    
+    if err:
+        return err
+        
+    rows = _rows(data)
+    if not rows:
+        return f"No debt market data found for exchange '{ex}'."
+
+    header = f"### Debt Market Watch: {ex.upper()}"
+    lines = [header, "---"]
+    
+    for i, row in enumerate(rows[:record_count], 1):
+        company_name = row.get("CompanyName", "N/A")
+        scrip_id = row.get("BSEScripID", "N/A")
+        price = row.get("Price") or 0.0
+        per_change = row.get("PerChange") or 0.0
+        face_value = row.get("FaceValue") or 0.0
+        value_traded = row.get("value_traded") or 0.0
+
+        indicator = "🟢" if per_change > 0 else "🔴" if per_change < 0 else "⚪"
+
+        # Displaying only highly relevant, high-impact data points
+        bond_line = (
+            f"{i}. **{company_name}** ({scrip_id})\n"
+            f"   * **Price:** ₹{float(price):,.2f} ({indicator} {float(per_change):+.2f}%)\n"
+            f"   * **Face Value:** ₹{float(face_value):,.2f} | **Value Traded:** ₹{float(value_traded):,.2f}"
+        )
+        lines.append(bond_line)
+
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Retrieves debt instruments with the highest trading volume for BSE or NSE. "
+    "Provides a concise summary of liquidity toppers, prices, and changes."
+))
+def get_debt_top_volume(exchange: str = "BSE", record_count: int = 7) -> str:
+    try:
+        ex = _normalise_exchange(exchange)
+    except ValueError as e:
+        return str(e)
+        
+    # Endpoint derived from your logs: Debt-Top-Volume/{ex}/{record_count}
+    url = EP["debt_top_volume"].format(ex=ex.upper(), record_count=record_count)
+    data, err = _get(url, f"DebtTopVolume[{ex}]")
+    
+    if err:
+        return err
+        
+    rows = _rows(data)
+    if not rows:
+        return f"No top volume debt market data found for exchange '{ex}'."
+
+    header = f"### Debt Top Volume: {ex.upper()}"
+    lines = [header, "---"]
+    
+    for i, row in enumerate(rows[:record_count], 1):
+        company_name = row.get("CompanyName", "N/A")
+        scrip_id = row.get("BSEScripID", "N/A")
+        price = row.get("Price") or 0.0
+        per_change = row.get("PerChange") or 0.0
+        vol_traded = row.get("vol_traded") or 0
+        value_traded = row.get("value_traded") or 0.0
+
+        indicator = "🟢" if per_change > 0 else "🔴" if per_change < 0 else "⚪"
+
+        # Displays only high-impact, volume-relevant data fields
+        bond_line = (
+            f"{i}. **{company_name}** ({scrip_id})\n"
+            f"   * **Price:** ₹{float(price):,.2f} ({indicator} {float(per_change):+.2f}%)\n"
+            f"   * **Volume:** {int(float(vol_traded)):,} | **Value Traded:** ₹{float(value_traded):,.2f}"
+        )
+        lines.append(bond_line)
+
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Retrieves debt instruments with the highest trading value for BSE or NSE. "
+    "Provides a concise summary of liquidity leaders based on turnover/value traded."
+))
+def get_debt_top_value(exchange: str = "BSE", record_count: int = 7) -> str:
+    try:
+        ex = _normalise_exchange(exchange)
+    except ValueError as e:
+        return str(e)
+        
+    # Endpoint derived from your logs: Debt-Top-Value/{ex}/{record_count}
+    url = EP["debt_top_value"].format(ex=ex.upper(), record_count=record_count)
+    data, err = _get(url, f"DebtTopValue[{ex}]")
+    
+    if err:
+        return err
+        
+    rows = _rows(data)
+    if not rows:
+        return f"No top value debt market data found for exchange '{ex}'."
+
+    header = f"### Debt Top Value: {ex.upper()}"
+    lines = [header, "---"]
+    
+    for i, row in enumerate(rows[:record_count], 1):
+        company_name = row.get("CompanyName", "N/A")
+        scrip_id = row.get("BSEScripID", "N/A")
+        price = row.get("Price") or 0.0
+        per_change = row.get("PerChange") or 0.0
+        vol_traded = row.get("vol_traded") or 0
+        value_traded = row.get("value_traded") or 0.0
+
+        indicator = "🟢" if per_change > 0 else "🔴" if per_change < 0 else "⚪"
+
+        # Displays only high-impact, value-relevant data fields
+        bond_line = (
+            f"{i}. **{company_name}** ({scrip_id})\n"
+            f"   * **Price:** ₹{float(price):,.2f} ({indicator} {float(per_change):+.2f}%)\n"
+            f"   * **Volume:** {int(float(vol_traded)):,} | **Value Traded:** ₹{float(value_traded):,.2f}"
+        )
+        lines.append(bond_line)
+
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Retrieves targeted end-of-day scrip-wise prices for a specific debt security "
+    "using its internal company code. Useful for pulling precise historical price data, "
+    "daily ranges, and total volumes."
+))
+def get_debt_eod_prices_scripwise(bond_code: int) -> str:
+    # Enforce integer validation matching your core engineering pattern
+    val, err = _require_int(bond_code, "cocode", "_resolve_bond_code")
+    if err:
+        return err
+
+    # Endpoint derived from your image structure: Debt-EODPrices-Scr/EOD
+    # Configured to look up the provided company code securely via the wide endpoint array
+    url = EP["debt_eod_prices_scripwise"].format(bond_code=val)
+    data, err = _get(url, f"DebtEODPricesScripwise[{val}]")
+    
+    if err:
+        return err
+        
+    # Standard parsing strategy looking into the data object key envelope
+    records = data.get("data", []) if isinstance(data, dict) else _as_list(data)
+    
+    # Filter out entries matching the target security code
+    matched_rows = []
+    for r in records:
+        try:
+            # Safely catch and isolate key iterations across payload casing variants
+            raw_code = r.get("Code") or r.get("code") or -1
+            if int(float(raw_code)) == val:
+                matched_rows.append(r)
+        except (ValueError, TypeError):
+            continue
+
+    if not matched_rows:
+        return f"No scrip-wise EOD debt records found for company code={val}."
+
+    header = f"### Scrip-Wise Debt EOD Data (Company Code: {val})"
+    lines = [header, "---"]
+    
+    # Restrict response display context to the requested 7 relevant, high-impact timeline entries
+    for i, row in enumerate(matched_rows[:7], 1):
+        trade_date = row.get("Tradedate") or row.get("tradedate") or "N/A"
+        day_high = row.get("DayHigh") or row.get("dayhigh") or 0.0
+        day_low = row.get("Daylow") or row.get("daylow") or 0.0
+        day_open = row.get("DayOpen") or row.get("dayopen") or 0.0
+        day_close = row.get("Dayclose") or row.get("dayclose") or 0.0
+        total_volume = row.get("TotalVolume") or row.get("totalvolume") or 0
+        total_value = row.get("TotalValue") or row.get("totalvalue") or 0.0
+
+        if isinstance(trade_date, str) and "T" in trade_date:
+            trade_date = trade_date.split("T")[0]
+
+        bond_line = (
+            f"{i}. **Trade Date:** {trade_date}\n"
+            f"   * **Close Price:** ₹{float(day_close):,.2f} | **Open:** ₹{float(day_open):,.2f}\n"
+            f"   * **Day Range:** H: ₹{float(day_high):,.2f} | L: ₹{float(day_low):,.2f}\n"
+            f"   * **Total Volume:** {int(float(total_volume)):,} | **Total Value:** ₹{float(total_value):,.2f}"
+        )
+        lines.append(bond_line)
+
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Retrieves a list of currently open Bond IPOs. "
+    "Provides highly relevant public issue details, closing dates, coupon rates, and sizes."
+))
+def get_open_bond_ipo(record_count: int = 7) -> str:
+    # Endpoint derived from your image: Open-Bond-IPO
+    url = EP["open_bond_ipo"]
+    data, err = _get(url, "OpenBondIPO")
+    
+    if err:
+        return err
+        
+    rows = _rows(data)
+    if not rows:
+        return "No open bond IPO records found."
+
+    header = "### Open Bond IPOs"
+    lines = [header, "---"]
+    
+    # Constrain loop to the exact record count of relevant metrics
+    for i, row in enumerate(rows[:record_count], 1):
+        # Extracting relevant high-impact fields directly from the image specification schema
+        company_name = row.get("lname") or row.get("sec_name") or "N/A"
+        bond_type = row.get("bondtype") or "Bond IPO"
+        issue_size = row.get("issuesize") or "N/A"
+        coupon_rate = row.get("couponrate") or "N/A"
+        
+        open_date = row.get("opendate") or "N/A"
+        close_date = row.get("closedate") or "N/A"
+        credit_rating = row.get("creditrating") or "N/A"
+        face_value = row.get("facevalue") or 0.0
+        min_amt = row.get("minapplicationamt") or 0.0
+
+        # Strip timestamp strings cleanly if present
+        if isinstance(open_date, str) and "T" in open_date:
+            open_date = open_date.split("T")[0]
+        if isinstance(close_date, str) and "T" in close_date:
+            close_date = close_date.split("T")[0]
+
+        bond_line = (
+            f"{i}. **{company_name}** ({bond_type})\n"
+            f"   * **Coupon Rate:** {coupon_rate}% | **Credit Rating:** {credit_rating}\n"
+            f"   * **Issue Size:** {issue_size} | **Face Value:** ₹{float(face_value):,.2f}\n"
+            f"   * **Timeline:** Open: {open_date} | Close: {close_date}\n"
+            f"   * **Min Application Amt:** ₹{float(min_amt):,.2f}"
+        )
+        lines.append(bond_line)
+
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Retrieves a list of upcoming/forthcoming Bond IPOs. "
+    "Provides highly relevant public issue indicators, launch timelines, coupon rates, and sizes."
+))
+def get_forthcoming_bond_ipo(record_count: int = 7) -> str:
+    # Endpoint derived from your image: Forthcoming-Bond-I
+    url = EP["forthcoming_bond_ipo"]
+    data, err = _get(url, "ForthcomingBondIPO")
+    
+    if err:
+        return err
+        
+    rows = _rows(data)
+    if not rows:
+        return "No forthcoming bond IPO records found."
+
+    header = "### Forthcoming Bond IPOs"
+    lines = [header, "---"]
+    
+    # Constrain loop to the exact record count of relevant metrics
+    for i, row in enumerate(rows[:record_count], 1):
+        # Extracting relevant high-impact fields directly from the image specification schema
+        company_name = row.get("lname") or row.get("sec_name") or "N/A"
+        bond_type = row.get("bondtype") or "Bond IPO"
+        issue_size = row.get("issuesize") or "N/A"
+        coupon_rate = row.get("couponrate") or "N/A"
+        
+        open_date = row.get("opendate") or "N/A"
+        close_date = row.get("closedate") or "N/A"
+        credit_rating = row.get("creditrating") or "N/A"
+        face_value = row.get("facevalue") or 0.0
+        min_amt = row.get("minapplicationamt") or 0.0
+
+        # Strip timestamp strings cleanly if present
+        if isinstance(open_date, str) and "T" in open_date:
+            open_date = open_date.split("T")[0]
+        if isinstance(close_date, str) and "T" in close_date:
+            close_date = close_date.split("T")[0]
+
+        bond_line = (
+            f"{i}. **{company_name}** ({bond_type})\n"
+            f"   * **Expected Coupon Rate:** {coupon_rate}% | **Credit Rating:** {credit_rating}\n"
+            f"   * **Issue Size:** {issue_size} | **Face Value:** ₹{float(face_value):,.2f}\n"
+            f"   * **Tentative Timeline:** Open: {open_date} | Close: {close_date}\n"
+            f"   * **Min Application Amt:** ₹{float(min_amt):,.2f}"
+        )
+        lines.append(bond_line)
+
+
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Retrieves core macroeconomic indicator data (e.g., Forex, Repo Rate, Inflation indices). "
+    "Provides global baseline economic data points."
+))
+def get_macro_economic_data(record_count: int = 7) -> str:
+    # Endpoint derived from your image and logs: MacroEconomicData
+    url = EP["macro_economic_data"]
+    data, err = _get(url, "MacroEconomicData")
+    
+    if err:
+        return err
+        
+    rows = _rows(data)
+    if not rows:
+        return "No macroeconomic indicators found."
+
+    header = "### Macroeconomic Data"
+    lines = [header, "---"]
+    
+    for i, row in enumerate(rows[:record_count], 1):
+        # Extract variables exactly matching your shell logs case-sensitive payload
+        comm_name = row.get("CommName") or "N/A"
+        date_val = row.get("Date") or "N/A"
+        metric_data = row.get("Data") or 0.0
+
+        if isinstance(date_val, str) and "T" in date_val:
+            date_val = date_val.split("T")[0]
+
+        # Formatting indicators cleanly based on data types
+        if "Inflation" in comm_name or "IIP" in comm_name:
+            formatted_data = f"{float(metric_data):,.2f} Index"
+        elif "Reserves" in comm_name:
+            formatted_data = f"${float(metric_data):,.2f} M"
+        elif float(metric_data) < 25.0:  # Represents interest rates like CRR, Repo, SLR, Libor
+            formatted_data = f"{float(metric_data):.3f}%"
+        else:
+            formatted_data = f"{float(metric_data):,.4f}"
+
+        lines.append(f"{i}. **{comm_name}**")
+        lines.append(f"   * **Value:** {formatted_data} | **As Of:** {date_val}")
+
+    return "\n".join(lines)
 
 # ══════════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
