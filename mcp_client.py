@@ -993,7 +993,7 @@ MAX_ROUNDS    = 15
 
 # Per-intent timeout in seconds.
 # Intent 2 timing out will NOT affect intent 1's already-saved result.
-INTENT_TIMEOUT_SECS = 150
+INTENT_TIMEOUT_SECS = 240
 
 LLM_BACKEND  = os.getenv("LLM_BACKEND", "ollama").lower()
 OLLAMA_HOST  = os.getenv("OLLAMA_HOST",  "http://localhost:11434")

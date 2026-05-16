@@ -82,3 +82,383 @@
 2026-05-15 11:59:01 [INFO] Added job "ETF master daily" to job store "default"
 2026-05-15 11:59:01 [INFO] Scheduler started
 2026-05-15 11:59:19 [INFO] Shutdown signal received. Exiting.
+2026-05-16 11:35:18 [INFO] Running initial sync on startup...
+2026-05-16 11:35:18 [INFO] ============================================================
+2026-05-16 11:35:18 [INFO] Starting full sync run
+2026-05-16 11:35:18 [INFO] [company_master] Starting sync...
+2026-05-16 11:35:23 [INFO] [company_master] API returned 6166 records.
+2026-05-16 11:35:23 [INFO] [company_master] Done — 6166 upserted, 0 new in 4.64s
+2026-05-16 11:35:23 [INFO] [group_master] Starting sync...
+2026-05-16 11:35:23 [INFO] [group_master] BSE returned 67 records.
+2026-05-16 11:35:24 [INFO] [group_master] NSE returned 65 records.
+2026-05-16 11:35:24 [INFO] [group_master] Done — 118 upserted, 0 new in 0.5s
+2026-05-16 11:35:24 [INFO] [fund_house] Starting sync...
+2026-05-16 11:35:24 [INFO] [fund_house] API returned 51 records.
+2026-05-16 11:35:24 [INFO] [fund_house] Done — 51 upserted, 0 new in 0.44s
+2026-05-16 11:35:24 [INFO] [scheme_master] Starting sync...
+2026-05-16 11:35:25 [INFO] [scheme_master] mf_cocode=27488 → 234 records
+2026-05-16 11:35:25 [INFO] [scheme_master] mf_cocode=38442 → 204 records
+2026-05-16 11:35:25 [INFO] [scheme_master] mf_cocode=22962 → 232 records
+2026-05-16 11:35:26 [INFO] [scheme_master] mf_cocode=17955 → 183 records
+2026-05-16 11:35:26 [INFO] [scheme_master] mf_cocode=6946 → 130 records
+2026-05-16 11:35:26 [INFO] [scheme_master] mf_cocode=14964 → 126 records
+2026-05-16 11:35:27 [INFO] [scheme_master] mf_cocode=18076 → 178 records
+2026-05-16 11:35:28 [INFO] [scheme_master] mf_cocode=6502 → 228 records
+2026-05-16 11:35:28 [INFO] [scheme_master] mf_cocode=17424 → 220 records
+2026-05-16 11:35:28 [INFO] [scheme_master] mf_cocode=68409 → 120 records
+2026-05-16 11:35:28 [INFO] [scheme_master] mf_cocode=73700 → 64 records
+2026-05-16 11:35:29 [INFO] [scheme_master] mf_cocode=78997 → 105 records
+2026-05-16 11:35:29 [INFO] [scheme_master] mf_cocode=6051 → 492 records
+2026-05-16 11:35:30 [INFO] [scheme_master] mf_cocode=3583 → 511 records
+2026-05-16 11:35:30 [INFO] [scheme_master] mf_cocode=21273 → 361 records
+2026-05-16 11:35:31 [INFO] [scheme_master] mf_cocode=28628 → 266 records
+2026-05-16 11:35:31 [INFO] [scheme_master] mf_cocode=21271 → 407 records
+2026-05-16 11:35:32 [INFO] [scheme_master] mf_cocode=29993 → 286 records
+2026-05-16 11:35:32 [INFO] [scheme_master] mf_cocode=43539 → 28 records
+2026-05-16 11:35:32 [INFO] [scheme_master] mf_cocode=73211 → 110 records
+2026-05-16 11:35:32 [INFO] [scheme_master] mf_cocode=40163 → 118 records
+2026-05-16 11:35:33 [INFO] [scheme_master] mf_cocode=95467 → 15 records
+2026-05-16 11:35:33 [INFO] [scheme_master] mf_cocode=92399 → 19 records
+2026-05-16 11:35:33 [INFO] [scheme_master] mf_cocode=29865 → 133 records
+2026-05-16 11:35:33 [INFO] [scheme_master] mf_cocode=12180 → 119 records
+2026-05-16 11:35:33 [INFO] [scheme_master] mf_cocode=41331 → 44 records
+2026-05-16 11:35:34 [INFO] [scheme_master] mf_cocode=92340 → 32 records
+2026-05-16 11:35:34 [INFO] [scheme_master] mf_cocode=37927 → 70 records
+2026-05-16 11:35:34 [INFO] [scheme_master] mf_cocode=75946 → 17 records
+2026-05-16 11:35:34 [INFO] [scheme_master] mf_cocode=41332 → 205 records
+2026-05-16 11:35:35 [INFO] [scheme_master] mf_cocode=23411 → 389 records
+2026-05-16 11:35:35 [INFO] [scheme_master] mf_cocode=41236 → 141 records
+2026-05-16 11:35:36 [INFO] [scheme_master] mf_cocode=19712 → 516 records
+2026-05-16 11:35:37 [INFO] [scheme_master] mf_cocode=20327 → 407 records
+2026-05-16 11:35:37 [INFO] [scheme_master] mf_cocode=5946 → 440 records
+2026-05-16 11:35:38 [INFO] [scheme_master] mf_cocode=35448 → 401 records
+2026-05-16 11:35:39 [INFO] [scheme_master] mf_cocode=5431 → 351 records
+2026-05-16 11:35:39 [INFO] [scheme_master] mf_cocode=18585 → 352 records
+2026-05-16 11:35:39 [INFO] [scheme_master] mf_cocode=75267 → 45 records
+2026-05-16 11:35:40 [INFO] [scheme_master] mf_cocode=27298 → 42 records
+2026-05-16 11:35:40 [INFO] [scheme_master] mf_cocode=95866 → 16 records
+2026-05-16 11:35:40 [INFO] [scheme_master] mf_cocode=92680 → 12 records
+2026-05-16 11:35:40 [INFO] [scheme_master] mf_cocode=75945 → 29 records
+2026-05-16 11:35:40 [INFO] [scheme_master] mf_cocode=94510 → 6 records
+2026-05-16 11:35:40 [INFO] [scheme_master] mf_cocode=95771 → 37 records
+2026-05-16 11:35:41 [INFO] [scheme_master] mf_cocode=6011 → 35 records
+2026-05-16 11:35:41 [INFO] [scheme_master] mf_cocode=18445 → 34 records
+2026-05-16 11:35:41 [INFO] [scheme_master] mf_cocode=51466 → 3 records
+2026-05-16 11:35:41 [INFO] [scheme_master] mf_cocode=95389 → 12 records
+2026-05-16 11:35:41 [INFO] [scheme_master] mf_cocode=94508 → 16 records
+2026-05-16 11:35:41 [INFO] [scheme_master] mf_cocode=95861 → 5 records
+2026-05-16 11:35:43 [INFO] [scheme_master] Done — 8546 upserted, 4 new in 18.67s
+2026-05-16 11:35:43 [INFO] [etf_master] Starting sync...
+2026-05-16 11:35:43 [INFO] [etf_master] API returned 327 records.
+2026-05-16 11:35:43 [INFO] [etf_master] Done — 327 upserted, 0 new in 0.51s
+2026-05-16 11:35:43 [INFO] [ipo_master] Starting sync...
+2026-05-16 11:35:44 [INFO] [ipo_master] API returned 135 records.
+2026-05-16 11:35:44 [INFO] [ipo_master] Done — 135 upserted, 135 new in 0.47s
+2026-05-16 11:35:44 [INFO] [bond_master] Starting sync...
+2026-05-16 11:36:04 [INFO] [bond_master] API returned 26827 records.
+2026-05-16 11:36:04 [ERROR] [sync_bond_master] Failed: value too long for type character varying(50)
+
+2026-05-16 11:36:04 [INFO] Full sync run complete in 46.06s
+2026-05-16 11:36:04 [INFO] ============================================================
+2026-05-16 11:36:04 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:36:04 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:36:04 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:36:04 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:36:04 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:36:04 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:36:04 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:36:04 [INFO] Scheduler running. Press Ctrl+C to stop.
+2026-05-16 11:36:04 [INFO] Added job "Company master 4x daily" to job store "default"
+2026-05-16 11:36:04 [INFO] Added job "Group master daily" to job store "default"
+2026-05-16 11:36:04 [INFO] Added job "Fund house daily" to job store "default"
+2026-05-16 11:36:04 [INFO] Added job "Scheme master daily" to job store "default"
+2026-05-16 11:36:04 [INFO] Added job "ETF master daily" to job store "default"
+2026-05-16 11:36:04 [INFO] Added job "IPO master daily" to job store "default"
+2026-05-16 11:36:04 [INFO] Added job "Bond master daily" to job store "default"
+2026-05-16 11:36:04 [INFO] Scheduler started
+2026-05-16 11:39:19 [INFO] Shutdown signal received. Exiting.
+2026-05-16 11:39:34 [INFO] Running initial sync on startup...
+2026-05-16 11:39:34 [INFO] ============================================================
+2026-05-16 11:39:34 [INFO] Starting full sync run
+2026-05-16 11:39:34 [INFO] [company_master] Starting sync...
+2026-05-16 11:39:39 [INFO] [company_master] API returned 6166 records.
+2026-05-16 11:39:40 [INFO] [company_master] Done — 6166 upserted, 0 new in 5.74s
+2026-05-16 11:39:40 [INFO] [group_master] Starting sync...
+2026-05-16 11:39:40 [INFO] [group_master] BSE returned 67 records.
+2026-05-16 11:39:40 [INFO] [group_master] NSE returned 65 records.
+2026-05-16 11:39:40 [INFO] [group_master] Done — 118 upserted, 0 new in 0.49s
+2026-05-16 11:39:40 [INFO] [fund_house] Starting sync...
+2026-05-16 11:39:41 [INFO] [fund_house] API returned 51 records.
+2026-05-16 11:39:41 [INFO] [fund_house] Done — 51 upserted, 0 new in 0.48s
+2026-05-16 11:39:41 [INFO] [scheme_master] Starting sync...
+2026-05-16 11:39:42 [INFO] [scheme_master] mf_cocode=27488 → 234 records
+2026-05-16 11:39:42 [INFO] [scheme_master] mf_cocode=38442 → 204 records
+2026-05-16 11:39:43 [INFO] [scheme_master] mf_cocode=22962 → 232 records
+2026-05-16 11:39:43 [INFO] [scheme_master] mf_cocode=17955 → 183 records
+2026-05-16 11:39:44 [INFO] [scheme_master] mf_cocode=6946 → 130 records
+2026-05-16 11:39:44 [INFO] [scheme_master] mf_cocode=14964 → 126 records
+2026-05-16 11:39:44 [INFO] [scheme_master] mf_cocode=18076 → 178 records
+2026-05-16 11:39:45 [INFO] [scheme_master] mf_cocode=6502 → 228 records
+2026-05-16 11:39:45 [INFO] [scheme_master] mf_cocode=17424 → 220 records
+2026-05-16 11:39:45 [INFO] [scheme_master] mf_cocode=68409 → 120 records
+2026-05-16 11:39:46 [INFO] [scheme_master] mf_cocode=73700 → 64 records
+2026-05-16 11:39:46 [INFO] [scheme_master] mf_cocode=78997 → 105 records
+2026-05-16 11:39:47 [INFO] [scheme_master] mf_cocode=28628 → 266 records
+2026-05-16 11:39:48 [INFO] [scheme_master] mf_cocode=21271 → 407 records
+2026-05-16 11:39:48 [INFO] [scheme_master] mf_cocode=29993 → 286 records
+2026-05-16 11:39:49 [INFO] [scheme_master] mf_cocode=43539 → 28 records
+2026-05-16 11:39:49 [INFO] [scheme_master] mf_cocode=73211 → 110 records
+2026-05-16 11:39:50 [INFO] [scheme_master] mf_cocode=6051 → 492 records
+2026-05-16 11:39:51 [INFO] [scheme_master] mf_cocode=3583 → 511 records
+2026-05-16 11:39:51 [INFO] [scheme_master] mf_cocode=21273 → 361 records
+2026-05-16 11:39:52 [INFO] [scheme_master] mf_cocode=40163 → 118 records
+2026-05-16 11:39:53 [INFO] [scheme_master] mf_cocode=23411 → 389 records
+2026-05-16 11:39:53 [INFO] [scheme_master] mf_cocode=41236 → 141 records
+2026-05-16 11:39:53 [INFO] [scheme_master] mf_cocode=95467 → 15 records
+2026-05-16 11:39:53 [INFO] [scheme_master] mf_cocode=92399 → 19 records
+2026-05-16 11:39:54 [INFO] [scheme_master] mf_cocode=29865 → 133 records
+2026-05-16 11:39:54 [INFO] [scheme_master] mf_cocode=12180 → 119 records
+2026-05-16 11:39:54 [INFO] [scheme_master] mf_cocode=41331 → 44 records
+2026-05-16 11:39:54 [INFO] [scheme_master] mf_cocode=92340 → 32 records
+2026-05-16 11:39:55 [INFO] [scheme_master] mf_cocode=37927 → 70 records
+2026-05-16 11:39:55 [INFO] [scheme_master] mf_cocode=75946 → 17 records
+2026-05-16 11:39:55 [INFO] [scheme_master] mf_cocode=41332 → 205 records
+2026-05-16 11:39:56 [INFO] [scheme_master] mf_cocode=19712 → 516 records
+2026-05-16 11:39:57 [INFO] [scheme_master] mf_cocode=20327 → 407 records
+2026-05-16 11:39:58 [INFO] [scheme_master] mf_cocode=5946 → 440 records
+2026-05-16 11:39:58 [INFO] [scheme_master] mf_cocode=35448 → 401 records
+2026-05-16 11:39:59 [INFO] [scheme_master] mf_cocode=5431 → 351 records
+2026-05-16 11:39:59 [INFO] [scheme_master] mf_cocode=18585 → 352 records
+2026-05-16 11:39:59 [INFO] [scheme_master] mf_cocode=75267 → 45 records
+2026-05-16 11:40:00 [INFO] [scheme_master] mf_cocode=27298 → 42 records
+2026-05-16 11:40:00 [INFO] [scheme_master] mf_cocode=95866 → 16 records
+2026-05-16 11:40:00 [INFO] [scheme_master] mf_cocode=92680 → 12 records
+2026-05-16 11:40:00 [INFO] [scheme_master] mf_cocode=75945 → 29 records
+2026-05-16 11:40:00 [INFO] [scheme_master] mf_cocode=94510 → 6 records
+2026-05-16 11:40:00 [INFO] [scheme_master] mf_cocode=95771 → 37 records
+2026-05-16 11:40:00 [INFO] [scheme_master] mf_cocode=6011 → 35 records
+2026-05-16 11:40:01 [INFO] [scheme_master] mf_cocode=18445 → 34 records
+2026-05-16 11:40:01 [INFO] [scheme_master] mf_cocode=51466 → 3 records
+2026-05-16 11:40:01 [INFO] [scheme_master] mf_cocode=95389 → 12 records
+2026-05-16 11:40:01 [INFO] [scheme_master] mf_cocode=94508 → 16 records
+2026-05-16 11:40:01 [INFO] [scheme_master] mf_cocode=95861 → 5 records
+2026-05-16 11:40:02 [INFO] [scheme_master] Done — 8546 upserted, 0 new in 21.63s
+2026-05-16 11:40:02 [INFO] [etf_master] Starting sync...
+2026-05-16 11:40:03 [INFO] [etf_master] API returned 327 records.
+2026-05-16 11:40:03 [INFO] [etf_master] Done — 327 upserted, 0 new in 0.65s
+2026-05-16 11:40:03 [INFO] [ipo_master] Starting sync...
+2026-05-16 11:40:04 [INFO] [ipo_master] API returned 135 records.
+2026-05-16 11:40:04 [INFO] [ipo_master] Done — 135 upserted, 0 new in 0.5s
+2026-05-16 11:40:04 [INFO] [bond_master] Starting sync...
+2026-05-16 11:40:18 [INFO] [bond_master] API returned 26827 records.
+2026-05-16 11:40:19 [ERROR] [sync_bond_master] Failed: value too long for type character varying(100)
+
+2026-05-16 11:40:19 [INFO] Full sync run complete in 44.57s
+2026-05-16 11:40:19 [INFO] ============================================================
+2026-05-16 11:40:19 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:40:19 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:40:19 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:40:19 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:40:19 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:40:19 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:40:19 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:40:19 [INFO] Scheduler running. Press Ctrl+C to stop.
+2026-05-16 11:40:19 [INFO] Added job "Company master 4x daily" to job store "default"
+2026-05-16 11:40:19 [INFO] Added job "Group master daily" to job store "default"
+2026-05-16 11:40:19 [INFO] Added job "Fund house daily" to job store "default"
+2026-05-16 11:40:19 [INFO] Added job "Scheme master daily" to job store "default"
+2026-05-16 11:40:19 [INFO] Added job "ETF master daily" to job store "default"
+2026-05-16 11:40:19 [INFO] Added job "IPO master daily" to job store "default"
+2026-05-16 11:40:19 [INFO] Added job "Bond master daily" to job store "default"
+2026-05-16 11:40:19 [INFO] Scheduler started
+2026-05-16 11:41:10 [INFO] Shutdown signal received. Exiting.
+2026-05-16 11:49:58 [INFO] Running initial sync on startup…
+2026-05-16 11:49:58 [INFO] ============================================================
+2026-05-16 11:49:58 [INFO] Starting full sync run
+2026-05-16 11:49:58 [INFO] [company_master] Starting sync…
+2026-05-16 11:50:04 [INFO] [company_master] API returned 6166 records.
+2026-05-16 11:50:04 [INFO] [company_master] Done — 6166 upserted, 0 new in 6.47s
+2026-05-16 11:50:04 [INFO] [group_master] Starting sync…
+2026-05-16 11:50:06 [INFO] [group_master] BSE returned 67 records.
+2026-05-16 11:50:06 [INFO] [group_master] NSE returned 65 records.
+2026-05-16 11:50:06 [INFO] [group_master] Done — 118 upserted, 0 new in 2.16s
+2026-05-16 11:50:06 [INFO] [fund_house] Starting sync…
+2026-05-16 11:50:07 [INFO] [fund_house] API returned 51 records.
+2026-05-16 11:50:07 [INFO] [fund_house] Done — 51 upserted, 0 new in 0.51s
+2026-05-16 11:50:07 [INFO] [scheme_master] Starting sync…
+2026-05-16 11:50:08 [INFO] [scheme_master] mf_cocode=27488 → 234 records
+2026-05-16 11:50:08 [INFO] [scheme_master] mf_cocode=38442 → 204 records
+2026-05-16 11:50:09 [INFO] [scheme_master] mf_cocode=22962 → 232 records
+2026-05-16 11:50:10 [INFO] [scheme_master] mf_cocode=17955 → 183 records
+2026-05-16 11:50:10 [INFO] [scheme_master] mf_cocode=6946 → 130 records
+2026-05-16 11:50:10 [INFO] [scheme_master] mf_cocode=14964 → 126 records
+2026-05-16 11:50:11 [INFO] [scheme_master] mf_cocode=18076 → 178 records
+2026-05-16 11:50:11 [INFO] [scheme_master] mf_cocode=6502 → 228 records
+2026-05-16 11:50:12 [INFO] [scheme_master] mf_cocode=17424 → 220 records
+2026-05-16 11:50:12 [INFO] [scheme_master] mf_cocode=68409 → 120 records
+2026-05-16 11:50:12 [INFO] [scheme_master] mf_cocode=73700 → 64 records
+2026-05-16 11:50:13 [INFO] [scheme_master] mf_cocode=78997 → 105 records
+2026-05-16 11:50:13 [INFO] [scheme_master] mf_cocode=6051 → 492 records
+2026-05-16 11:50:14 [INFO] [scheme_master] mf_cocode=3583 → 511 records
+2026-05-16 11:50:14 [INFO] [scheme_master] mf_cocode=21273 → 361 records
+2026-05-16 11:50:15 [INFO] [scheme_master] mf_cocode=28628 → 266 records
+2026-05-16 11:50:16 [INFO] [scheme_master] mf_cocode=21271 → 407 records
+2026-05-16 11:50:16 [INFO] [scheme_master] mf_cocode=29993 → 286 records
+2026-05-16 11:50:17 [INFO] [scheme_master] mf_cocode=43539 → 28 records
+2026-05-16 11:50:18 [INFO] [scheme_master] mf_cocode=73211 → 110 records
+2026-05-16 11:50:18 [INFO] [scheme_master] mf_cocode=40163 → 118 records
+2026-05-16 11:50:18 [INFO] [scheme_master] mf_cocode=95467 → 15 records
+2026-05-16 11:50:18 [INFO] [scheme_master] mf_cocode=92399 → 19 records
+2026-05-16 11:50:19 [INFO] [scheme_master] mf_cocode=29865 → 133 records
+2026-05-16 11:50:19 [INFO] [scheme_master] mf_cocode=12180 → 119 records
+2026-05-16 11:50:19 [INFO] [scheme_master] mf_cocode=41331 → 44 records
+2026-05-16 11:50:20 [INFO] [scheme_master] mf_cocode=92340 → 32 records
+2026-05-16 11:50:20 [INFO] [scheme_master] mf_cocode=37927 → 70 records
+2026-05-16 11:50:20 [INFO] [scheme_master] mf_cocode=75946 → 17 records
+2026-05-16 11:50:20 [INFO] [scheme_master] mf_cocode=41332 → 205 records
+2026-05-16 11:50:21 [INFO] [scheme_master] mf_cocode=23411 → 389 records
+2026-05-16 11:50:22 [INFO] [scheme_master] mf_cocode=41236 → 141 records
+2026-05-16 11:50:22 [INFO] [scheme_master] mf_cocode=19712 → 516 records
+2026-05-16 11:50:23 [INFO] [scheme_master] mf_cocode=20327 → 407 records
+2026-05-16 11:50:24 [INFO] [scheme_master] mf_cocode=5946 → 440 records
+2026-05-16 11:50:24 [INFO] [scheme_master] mf_cocode=35448 → 401 records
+2026-05-16 11:50:25 [INFO] [scheme_master] mf_cocode=5431 → 351 records
+2026-05-16 11:50:26 [INFO] [scheme_master] mf_cocode=18585 → 352 records
+2026-05-16 11:50:27 [INFO] [scheme_master] mf_cocode=75267 → 45 records
+2026-05-16 11:50:27 [INFO] [scheme_master] mf_cocode=27298 → 42 records
+2026-05-16 11:50:27 [INFO] [scheme_master] mf_cocode=95866 → 16 records
+2026-05-16 11:50:27 [INFO] [scheme_master] mf_cocode=92680 → 12 records
+2026-05-16 11:50:28 [INFO] [scheme_master] mf_cocode=75945 → 29 records
+2026-05-16 11:50:28 [INFO] [scheme_master] mf_cocode=94510 → 6 records
+2026-05-16 11:50:28 [INFO] [scheme_master] mf_cocode=95771 → 37 records
+2026-05-16 11:50:28 [INFO] [scheme_master] mf_cocode=6011 → 35 records
+2026-05-16 11:50:29 [INFO] [scheme_master] mf_cocode=18445 → 34 records
+2026-05-16 11:50:29 [INFO] [scheme_master] mf_cocode=51466 → 3 records
+2026-05-16 11:50:29 [INFO] [scheme_master] mf_cocode=95389 → 12 records
+2026-05-16 11:50:29 [INFO] [scheme_master] mf_cocode=94508 → 16 records
+2026-05-16 11:50:29 [INFO] [scheme_master] mf_cocode=95861 → 5 records
+2026-05-16 11:50:31 [INFO] [scheme_master] Done — 8546 upserted, 0 new in 23.78s
+2026-05-16 11:50:31 [INFO] [etf_master] Starting sync…
+2026-05-16 11:50:31 [INFO] [etf_master] API returned 327 records.
+2026-05-16 11:50:31 [INFO] [etf_master] Done — 327 upserted, 0 new in 0.6s
+2026-05-16 11:50:31 [INFO] [ipo_master] Starting sync…
+2026-05-16 11:50:32 [INFO] [ipo_master] API returned 135 records.
+2026-05-16 11:50:32 [INFO] [ipo_master] Done — 135 upserted, 0 new in 0.53s
+2026-05-16 11:50:32 [INFO] [bond_master] Starting sync…
+2026-05-16 11:50:55 [INFO] [bond_master] API returned 26827 records.
+2026-05-16 11:50:55 [ERROR] [sync_bond_master] Failed: value too long for type character varying(100)
+
+2026-05-16 11:50:56 [INFO] Full sync run complete in 57.94s
+2026-05-16 11:50:56 [INFO] ============================================================
+2026-05-16 11:50:56 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:50:56 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:50:56 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:50:56 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:50:56 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:50:56 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:50:56 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:50:56 [INFO] Scheduler running. Press Ctrl+C to stop.
+2026-05-16 11:50:56 [INFO] Added job "Company master 4x daily" to job store "default"
+2026-05-16 11:50:56 [INFO] Added job "Group master daily" to job store "default"
+2026-05-16 11:50:56 [INFO] Added job "Fund house daily" to job store "default"
+2026-05-16 11:50:56 [INFO] Added job "Scheme master daily" to job store "default"
+2026-05-16 11:50:56 [INFO] Added job "ETF master daily" to job store "default"
+2026-05-16 11:50:56 [INFO] Added job "IPO master daily" to job store "default"
+2026-05-16 11:50:56 [INFO] Added job "Bond master daily" to job store "default"
+2026-05-16 11:50:56 [INFO] Scheduler started
+2026-05-16 11:53:47 [INFO] Shutdown signal received. Exiting.
+2026-05-16 11:53:50 [INFO] Running initial sync on startup…
+2026-05-16 11:53:50 [INFO] ============================================================
+2026-05-16 11:53:50 [INFO] Starting full sync run
+2026-05-16 11:53:50 [INFO] [company_master] Starting sync…
+2026-05-16 11:54:08 [INFO] [company_master] API returned 6166 records.
+2026-05-16 11:54:08 [INFO] [company_master] Done — 6166 upserted, 0 new in 18.37s
+2026-05-16 11:54:08 [INFO] [group_master] Starting sync…
+2026-05-16 11:54:09 [INFO] [group_master] BSE returned 67 records.
+2026-05-16 11:54:10 [INFO] [group_master] NSE returned 65 records.
+2026-05-16 11:54:10 [INFO] [group_master] Done — 118 upserted, 0 new in 1.51s
+2026-05-16 11:54:10 [INFO] [fund_house] Starting sync…
+2026-05-16 11:54:11 [INFO] [fund_house] API returned 51 records.
+2026-05-16 11:54:11 [INFO] [fund_house] Done — 51 upserted, 0 new in 1.03s
+2026-05-16 11:54:11 [INFO] [scheme_master] Starting sync…
+2026-05-16 11:54:14 [INFO] [scheme_master] mf_cocode=27488 → 234 records
+2026-05-16 11:54:15 [INFO] [scheme_master] mf_cocode=38442 → 204 records
+2026-05-16 11:54:17 [INFO] [scheme_master] mf_cocode=22962 → 232 records
+2026-05-16 11:54:19 [INFO] [scheme_master] mf_cocode=17955 → 183 records
+2026-05-16 11:54:20 [INFO] [scheme_master] mf_cocode=6946 → 130 records
+2026-05-16 11:54:21 [INFO] [scheme_master] mf_cocode=14964 → 126 records
+2026-05-16 11:54:22 [INFO] [scheme_master] mf_cocode=18076 → 178 records
+2026-05-16 11:54:24 [INFO] [scheme_master] mf_cocode=6502 → 228 records
+2026-05-16 11:54:25 [INFO] [scheme_master] mf_cocode=17424 → 220 records
+2026-05-16 11:54:26 [INFO] [scheme_master] mf_cocode=68409 → 120 records
+2026-05-16 11:54:26 [INFO] [scheme_master] mf_cocode=73700 → 64 records
+2026-05-16 11:54:27 [INFO] [scheme_master] mf_cocode=78997 → 105 records
+2026-05-16 11:54:28 [INFO] [scheme_master] mf_cocode=28628 → 266 records
+2026-05-16 11:54:29 [INFO] [scheme_master] mf_cocode=21271 → 407 records
+2026-05-16 11:54:31 [INFO] [scheme_master] mf_cocode=29993 → 286 records
+2026-05-16 11:54:31 [INFO] [scheme_master] mf_cocode=43539 → 28 records
+2026-05-16 11:54:32 [INFO] [scheme_master] mf_cocode=73211 → 110 records
+2026-05-16 11:54:34 [INFO] [scheme_master] mf_cocode=6051 → 492 records
+2026-05-16 11:54:36 [INFO] [scheme_master] mf_cocode=3583 → 511 records
+2026-05-16 11:54:38 [INFO] [scheme_master] mf_cocode=21273 → 361 records
+2026-05-16 11:54:39 [INFO] [scheme_master] mf_cocode=40163 → 118 records
+2026-05-16 11:54:39 [INFO] [scheme_master] mf_cocode=95467 → 15 records
+2026-05-16 11:54:39 [INFO] [scheme_master] mf_cocode=92399 → 19 records
+2026-05-16 11:54:40 [INFO] [scheme_master] mf_cocode=29865 → 133 records
+2026-05-16 11:54:40 [INFO] [scheme_master] mf_cocode=12180 → 119 records
+2026-05-16 11:54:41 [INFO] [scheme_master] mf_cocode=41331 → 44 records
+2026-05-16 11:54:41 [INFO] [scheme_master] mf_cocode=92340 → 32 records
+2026-05-16 11:54:41 [INFO] [scheme_master] mf_cocode=37927 → 70 records
+2026-05-16 11:54:41 [INFO] [scheme_master] mf_cocode=75946 → 17 records
+2026-05-16 11:54:42 [INFO] [scheme_master] mf_cocode=41332 → 205 records
+2026-05-16 11:54:43 [INFO] [scheme_master] mf_cocode=23411 → 389 records
+2026-05-16 11:54:44 [INFO] [scheme_master] mf_cocode=41236 → 141 records
+2026-05-16 11:54:45 [INFO] [scheme_master] mf_cocode=19712 → 516 records
+2026-05-16 11:54:46 [INFO] [scheme_master] mf_cocode=20327 → 407 records
+2026-05-16 11:54:48 [INFO] [scheme_master] mf_cocode=5946 → 440 records
+2026-05-16 11:54:50 [INFO] [scheme_master] mf_cocode=35448 → 401 records
+2026-05-16 11:54:51 [INFO] [scheme_master] mf_cocode=5431 → 351 records
+2026-05-16 11:54:52 [INFO] [scheme_master] mf_cocode=18585 → 352 records
+2026-05-16 11:54:53 [INFO] [scheme_master] mf_cocode=75267 → 45 records
+2026-05-16 11:54:54 [INFO] [scheme_master] mf_cocode=27298 → 42 records
+2026-05-16 11:54:54 [INFO] [scheme_master] mf_cocode=95866 → 16 records
+2026-05-16 11:54:54 [INFO] [scheme_master] mf_cocode=92680 → 12 records
+2026-05-16 11:54:54 [INFO] [scheme_master] mf_cocode=75945 → 29 records
+2026-05-16 11:54:55 [INFO] [scheme_master] mf_cocode=94510 → 6 records
+2026-05-16 11:54:55 [INFO] [scheme_master] mf_cocode=95771 → 37 records
+2026-05-16 11:54:55 [INFO] [scheme_master] mf_cocode=6011 → 35 records
+2026-05-16 11:54:55 [INFO] [scheme_master] mf_cocode=18445 → 34 records
+2026-05-16 11:54:56 [INFO] [scheme_master] mf_cocode=51466 → 3 records
+2026-05-16 11:54:56 [INFO] [scheme_master] mf_cocode=95389 → 12 records
+2026-05-16 11:54:56 [INFO] [scheme_master] mf_cocode=94508 → 16 records
+2026-05-16 11:54:56 [INFO] [scheme_master] mf_cocode=95861 → 5 records
+2026-05-16 11:54:57 [INFO] [scheme_master] Done — 8546 upserted, 0 new in 46.82s
+2026-05-16 11:54:57 [INFO] [etf_master] Starting sync…
+2026-05-16 11:54:58 [INFO] [etf_master] API returned 327 records.
+2026-05-16 11:54:58 [INFO] [etf_master] Done — 327 upserted, 0 new in 0.83s
+2026-05-16 11:54:58 [INFO] [ipo_master] Starting sync…
+2026-05-16 11:54:59 [INFO] [ipo_master] API returned 135 records.
+2026-05-16 11:54:59 [INFO] [ipo_master] Done — 135 upserted, 0 new in 0.66s
+2026-05-16 11:54:59 [INFO] [bond_master] Starting sync…
+2026-05-16 11:55:48 [INFO] [bond_master] API returned 26827 records.
+2026-05-16 11:55:49 [ERROR] [sync_bond_master] Failed: value too long for type character varying(100)
+
+2026-05-16 11:55:49 [INFO] Full sync run complete in 118.98s
+2026-05-16 11:55:49 [INFO] ============================================================
+2026-05-16 11:55:49 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:55:49 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:55:49 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:55:49 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:55:49 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:55:49 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:55:49 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16 11:55:49 [INFO] Scheduler running. Press Ctrl+C to stop.
+2026-05-16 11:55:49 [INFO] Added job "Company master 4x daily" to job store "default"
+2026-05-16 11:55:49 [INFO] Added job "Group master daily" to job store "default"
+2026-05-16 11:55:49 [INFO] Added job "Fund house daily" to job store "default"
+2026-05-16 11:55:49 [INFO] Added job "Scheme master daily" to job store "default"
+2026-05-16 11:55:49 [INFO] Added job "ETF master daily" to job store "default"
+2026-05-16 11:55:49 [INFO] Added job "IPO master daily" to job store "default"
+2026-05-16 11:55:49 [INFO] Added job "Bond master daily" to job store "default"
+2026-05-16 11:55:49 [INFO] Scheduler started
+2026-05-16 11:56:26 [INFO] Shutdown signal received. Exiting.

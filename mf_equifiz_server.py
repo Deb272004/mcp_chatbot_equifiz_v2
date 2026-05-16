@@ -1507,6 +1507,7 @@ def get_index_companies(index_code: int) -> str:
     return "\n".join(lines)
 
 
+
 @mcp.tool(description="Get all companies in a sector by sector code.")
 def get_sector_companies(sector_code: str) -> str:
     url = EP["sector_wise_comp"].format(sector_code=sector_code)
@@ -1527,6 +1528,7 @@ def get_sector_companies(sector_code: str) -> str:
     return "\n".join(lines)
 
 
+
 @mcp.tool(description="Get latest BSE corporate announcements.")
 def get_bse_announcements() -> str:
     data, err = _get(EP["bse_announcement"], "BSEAnnouncement")
@@ -1541,7 +1543,7 @@ def get_bse_announcements() -> str:
     lines.append("-" * 60)
 
     # Limiting to top 15 as in your original logic
-    for i, row in enumerate(rows[:10], 1):
+    for i, row in enumerate(rows[:5], 1):
         # Mapping to the keys in your image: lname, caption, date, etc.
         p = _pick(row, [
             "lname", 
@@ -1584,7 +1586,7 @@ def get_nse_announcements() -> str:
     lines.append("-" * 65)
 
     # Limiting to top 15 for concise context
-    for i, row in enumerate(rows[:10], 1):
+    for i, row in enumerate(rows[:5], 1):
         # Mapped to the keys in your provided image
         p = _pick(row, [
             "lname", 
@@ -1610,6 +1612,7 @@ def get_nse_announcements() -> str:
         lines.append("") # Spacer for readability
 
     return "\n".join(lines)
+
 
 @mcp.tool(description=(
     "Retrieves the latest corporate announcements from the Bombay Stock Exchange (BSE) "
@@ -1733,7 +1736,7 @@ def get_nse_company_announcements(co_code: int) -> str:
 
 
 @mcp.tool(description="Get latest corporate news headlines. count: number of articles (default 10).")
-def get_corporate_news(count: int = 10) -> str:
+def get_corporate_news(count: int = 5) -> str:
     # Ensure count is passed to the API as per your schema 'recordcount'
     url = EP["corporate_news"].format(n=count)
     data, err = _get(url, "CorporateNews")
@@ -1777,6 +1780,7 @@ def get_corporate_news(count: int = 10) -> str:
             
     return "\n".join(lines)
 
+
 @mcp.tool(description="Get companies that declared results today.")
 def get_results_today() -> str:
     data, err = _get(EP["results_today"], "ResultsToday")
@@ -1787,40 +1791,79 @@ def get_results_today() -> str:
     if not rows:
         return "No results declared today."
         
-    lines = [f"Companies Reporting Today ({len(rows)}):"]
-    lines.append("-" * 50)
+    # Capped to 5 items to keep data clean and readable
+    capped_rows = rows[:5]
+    lines = [f"### Companies Reporting Today (Showing 5 of {len(rows)}):", "---"]
 
-    for i, row in enumerate(rows, 1):
-        # Picking from your schema: co_name and resultdate
-        # Including heading/caption in case the API returns result summaries
-        p = _pick(row, [
-            "co_name", 
-            "symbol", 
-            "resultdate", 
-            "heading", 
-            "caption",
-            "time"
-        ])
+    for i, row in enumerate(capped_rows, 1):
+        name = row.get("co_name") or "N/A"
+        symbol = row.get("symbol") or "N/A"
         
-        name = p.get("co_name") or p.get("heading") or "N/A"
-        symbol = p.get("symbol", "")
-        # Handle cases where resultdate might be under the 'date' key from your image
-        date_val = p.get("resultdate") or row.get("date", "N/A")
-        raw_date = str(date_val)[:10]
-        
-        # Adding 'time' from your schema as it's useful for "Results Today"
-        time_val = p.get("time", "")
-        time_str = f" at {time_val}" if time_val else ""
+        # Clean timestamps from the API strings
+        res_date = str(row.get("resultdate", "N/A"))[:10]
+        ann_date = str(row.get("announcementdate", "N/A"))[:10]
 
         lines.append(
-            f"  {i:>2}. {name:<30} | {symbol:<10} | {raw_date}{time_str}"
+            f"{i}. **{name}** ({symbol})\n"
+            f"   * **Result Date:** {res_date}\n"
+            f"   * **Announcement Date:** {ann_date}"
         )
         
-        # If there's a brief caption (like 'Board meeting concluded'), include it
-        if p.get("caption"):
-            lines.append(f"      Status: {p['caption']}")
-
     return "\n".join(lines)
+
+
+
+@mcp.tool(description=(
+    "Retrieves the specific earnings result dates and announcement schedules "
+    "for an individual company using its code. REQUIRES co_code."
+))
+def get_company_result_schedule(co_code: int) -> str:
+    """
+    Args:
+        co_code: The numeric internal company identifier.
+    """
+    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
+    if err:
+        return err
+
+    # Calling the bulk live data stream
+    data, err = _get(EP["results_today"], "CompanyResultSchedule")
+    if err:
+        return err
+    
+    rows = _rows(data)
+    if not rows:
+        return f"No results board meetings found in the current active feed."
+        
+    # Local memory search filter matching your data payload floats/ints
+    matched_row = None
+    for row in rows:
+        row_co_code = row.get("co_code")
+        try:
+            if row_co_code and int(float(row_co_code)) == val:
+                matched_row = row
+                break
+        except (ValueError, TypeError):
+            continue
+
+    if not matched_row:
+        return f"Company code {val} is not scheduled to release results in today's tracking batch."
+
+    name = matched_row.get("co_name", "N/A")
+    symbol = matched_row.get("symbol") or "N/A"
+    isin = matched_row.get("isin", "N/A")
+    res_date = str(matched_row.get("resultdate", "N/A"))[:10]
+    ann_date = str(matched_row.get("announcementdate", "N/A"))[:10]
+
+    output = (
+        f"### Result Schedule: {name}\n"
+        f"---\n"
+        f"* **NSE Symbol:** `{symbol}`\n"
+        f"* **ISIN Identifier:** `{isin}`\n"
+        f"* **Board Meeting / Result Date:** `{res_date}`\n"
+        f"* **Prior Intimation Date:** {ann_date}\n"
+    )
+    return output
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SECTION 3 — STOCK FUNDAMENTAL RATIOS
@@ -6168,6 +6211,7 @@ def search_mf_schemes(query: str, limit: int = 5) -> str:
     return "\n".join(lines)
 
 
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # SECTION 8 — MF AMC-LEVEL TOOLS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -6177,7 +6221,7 @@ def get_all_fund_houses() -> str:
     data, err = _get(EP["fund_house"], "FundHouses")
     if err:
         return err
-    rows = _as_list(data)[:50]
+    rows = _as_list(data)[:10]
     lines = [f"Fund Houses ({len(rows)} AMCs):"]
     for i, row in enumerate(rows, 1):
         p = _pick(row, ["lname", "fund_type", "osch", "csch", "sumoftotnav", "dateas"])
@@ -6255,30 +6299,60 @@ def get_fund_profile(mf_cocode: int) -> str:
         return "No profile data found."
     lines = ["Fund Profile — available scheme classes:"]
     for row in rows:
-        p = _pick(row, ["VCLASS"])
-        if p.get("VCLASS"):
-            lines.append(f"  • {p['VCLASS']}")
+        p = _pick(row, ["vclass"])
+        if p.get("vclass"):
+            lines.append(f"  • {p['vclass']}")
     return "\n".join(lines) if len(lines) > 1 else "No class data found."
 
 
-@mcp.tool(description="List all fund managers across AMCs with scheme assignments and tenure.")
-def get_fund_managers() -> str:
+
+@mcp.tool(description=(
+    "List fund managers across AMCs with scheme assignments and tenure. "
+    "REQUIRES mf_cocode — call resolve_mf_fund first."
+))
+def get_fund_managers(mf_cocode: int) -> str:
+    # 1. Enforce integer validation matching the get_scheme_nav pattern
+    val, err = _require_int(mf_cocode, "mf_cocode", "resolve_mf_fund")
+    if err:
+        return err
+
+    # 2. Fetch the flat data from the global endpoint
     data, err = _get(EP["fund_manager"], "FundManagers")
     if err:
         return err
-    rows = _as_list(data)[:30]
-    if not rows:
-        return "No fund manager data available."
+    
+    # 3. Use the envelope key parsing strategy or fallback to list
+    records = data.get("data", []) if isinstance(data, dict) else _as_list(data)
+    
+    # 4. Filter records matching the provided mf_cocode (handling float/string string cleanups safely)
+    matched_rows = []
+    for r in records:
+        try:
+            # Mirroring the int(float(r.get(key, -1))) logic from get_scheme_nav
+            raw_code = r.get("mf_cocode") or r.get("MfCoCode") or r.get("MF_COCODE") or -1
+            if int(float(raw_code)) == val:
+                matched_rows.append(r)
+        except (ValueError, TypeError):
+            continue
+
+    # 5. Cap results to a safe payload limit after matching
+    sliced_rows = matched_rows[:30]
+    if not sliced_rows:
+        return f"No fund manager records found for mf_cocode={val}."
+
+    # 6. Map scheme details from lookup cache
     sch_lookup = {s["mf_schcode"]: s["sch_name"] for s in _load_mf_scheme_cache()}
-    lines = [f"Fund Managers ({len(rows)} records):"]
-    for row in rows:
-        mgr   = row.get("fund_mgr") or row.get("FundMgr") or "N/A"
-        since = row.get("SinceDate") or row.get("sincedate") or ""
+    
+    # 7. Format final response output string
+    lines = [f"Fund Managers for AMC Code {val} ({len(sliced_rows)} found):"]
+    for row in sliced_rows:
+        mgr   = row.get("fund_mgr")  or row.get("FundMgr")   or "N/A"
+        since = row.get("SinceDate") or row.get("sincedate") or "N/A"
         scode = row.get("mf_schcode") or row.get("MF_SCHCODE")
         sname = sch_lookup.get(scode, "N/A") if scode else "N/A"
         lines.append(f"  • {mgr}  |  Scheme: {sname}  |  Since: {since}")
+        
     return "\n".join(lines)
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SECTION 9 — MF SCHEME-LEVEL TOOLS
@@ -6351,7 +6425,7 @@ def get_expense_ratio(mf_schcode: int) -> str:
     if err:
         return err
     rows = _rows(data)
-    match = next((r for r in rows if int(float(r.get("mf_schcode", -1))) == val), None)
+    match = next((r for r in rows if int(float(r.get("Mf_SchCode", -1))) == val), None)
     if not match:
         return "Expense ratio data not found for this scheme."
     p = _pick(match, ["EXPRATIO", "entry", "exit", "mininvt", "SIP_MinInv"])
@@ -6417,6 +6491,7 @@ def get_scheme_aum(mf_schcode: int) -> str:
         lines.append(f"  {p.get('AUMDate','N/A')}: {p.get('AUM','N/A')} Cr")
     return "\n".join(lines)
 
+
 @mcp.tool(description=(
     "Retrieves historical NAV data for performance benchmarking. "
     "Accepts 'M' (Months) or 'Y' (Years) as 'period' and an integer 'periodval'. "
@@ -6438,9 +6513,10 @@ def get_nav_historical(mf_schcode: int, period: str = "Y", periodval: int = 1) -
         return "No historical NAV data found."
     lines = [f"Historical NAV (last {pv}{'Y' if p=='Y' else 'M'}):"]
     for row in rows:
-        pr = _pick(row, ["NavDate", "NAVRS", "adjnavrs"])
-        lines.append(f"  {pr.get('NavDate','N/A')}: {pr.get('NAVRS','N/A')} : {pr.get('adjnavrs','N/A')}")
+        pr = _pick(row, ["NAVDATE", "NAVRS", "ADJNAVRS"])
+        lines.append(f"  {pr.get('NAVDATE','N/A')}: {pr.get('NAVRS','N/A')} : {pr.get('ADJNAVRS','N/A')}")
     return "\n".join(lines)
+
 
 
 @mcp.tool(description=(
@@ -6574,6 +6650,7 @@ def get_fund_performance(top: int = 10, fund_type: str = "Equity", category: str
         )
     return "\n".join(lines)
 
+
 @mcp.tool(description=(
     "Fetches average trailing returns for broad fund categories (e.g., Mid Cap, Liquid). "
     "Use this to answer 'How is the Equity market doing?' or to provide a "
@@ -6600,27 +6677,102 @@ def get_category_performance(fund_type: str = "Equity", top: int = 20) -> str:
         )
     return "\n".join(lines)
 
+
 @mcp.tool(description=(
-    "Retrieves scheduling rules for SIP (Investment), SWP (Withdrawal), and STP (Transfer). "
-    "Provides available monthly transaction dates and minimum amount requirements. "
-    "Use this to guide users through the setup of automated financial plans. "
+    "Retrieves a brief global overview of default scheduling rules for SIP, SWP, or STP. "
+    "Returns general frequencies and sample transaction parameters. "
+    "For specific scheme rules, use get_scheme_sip_rules."
 ))
 def get_sip_dates(plan: str = "SIP") -> str:
     p = plan.strip().upper()
     if p not in ("SIP", "SWP", "STP"):
-        return f"plan must be 'SIP', 'SWP', or 'STP' — got '{plan}'."
+        return f"Error: plan must be 'SIP', 'SWP', or 'STP' — got '{plan}'."
+        
     url = EP["sip_dates"].format(plan=p)
     data, err = _get(url, f"SIPDates[{p}]")
     if err:
         return err
-    rows = _rows(data)
-    if not rows:
-        return f"No {p} date data found."
-    lines = [f"{p} Available Dates:"]
-    for row in rows[:10]:
-        pr = _pick(row, ["frequency", "d1", "d2", "d3"])
-        dates = ", ".join(str(pr[d]) for d in ["d1", "d2", "d3"] if pr.get(d))
-        lines.append(f"  {pr.get('frequency','N/A')}: {dates}")
+        
+    # Standardize records envelope extraction
+    records = data.get("data", []) if isinstance(data, dict) else _as_list(data)
+    if not records:
+        return f"No general {p} scheduling rule configurations found."
+        
+    lines = [f"=== Global {p} Schedule Framework (Top 10 Reference Configurations) ==="]
+    
+    # Cap processing strictly to 10 records for safety
+    for row in records[:10]:
+        freq = row.get("frequency") or row.get("Frequency") or "N/A"
+        min_amt = row.get("minamt") or row.get("MinAmt") or "N/A"
+        any_day = row.get("any") or row.get("Any")
+        
+        # Gather all valid localized numerical monthly execution days (non-zero)
+        raw_days = [row.get(f"d{i}") for i in range(1, 11)]
+        days = [str(int(float(d))) for d in raw_days if d is not None and float(d) > 0]
+        
+        schedule_str = f"Dates: {', '.join(days)}" if days else f"Allowed Days: {any_day or 'ANY'}"
+        lines.append(f"  • Freq: {freq:<11} | Min Amt: ₹{min_amt:<6} | {schedule_str}")
+        
+    return "\n".join(lines)
+
+
+@mcp.tool(description=(
+    "Retrieves precise transaction dates, day options, and minimum amounts for a specific scheme. "
+    "REQUIRES a valid mf_schcode (call resolve_mf_scheme first)."
+))
+def get_scheme_sip_rules(mf_schcode: int, plan: str = "SIP") -> str:
+    # 1. Enforce integer validation standard
+    val, err = _require_int(mf_schcode, "mf_schcode", "resolve_mf_scheme")
+    if err:
+        return err
+        
+    p = plan.strip().upper()
+    if p not in ("SIP", "SWP", "STP"):
+        return f"Error: plan must be 'SIP', 'SWP', or 'STP' — got '{plan}'."
+        
+    url = EP["sip_dates"].format(plan=p)
+    data, err = _get(url, f"SIPDates[{p}]")
+    if err:
+        return err
+        
+    # 2. Extract records list from structural layout
+    records = data.get("data", []) if isinstance(data, dict) else _as_list(data)
+    if not records:
+        return f"No configuration rules available for plan option {p}."
+        
+    # 3. Filter using the explicit float-to-int conversion pattern matching get_scheme_nav
+    matched_rules = []
+    for r in records:
+        try:
+            raw_sch = r.get("mf_schcode") or r.get("MfSchCode") or r.get("MF_SCHCODE") or -1
+            if int(float(raw_sch)) == val:
+                matched_rules.append(r)
+        except (ValueError, TypeError):
+            continue
+            
+    if not matched_rules:
+        return f"No explicit {p} scheduling rules or investment options found for mf_schcode={val}."
+        
+    # 4. Process and layout clear schedule combinations found for the asset
+    lines = [f"=== Plan Rules ({p}) for Scheme Code: {val} ({len(matched_rules)} options found) ==="]
+    
+    for row in matched_rules:
+        freq = row.get("frequency") or row.get("Frequency") or "N/A"
+        min_amt = row.get("minamt") or row.get("MinAmt") or "N/A"
+        any_day = row.get("any") or row.get("Any")
+        
+        # Build array of explicitly designated monthly calendar matrix dates
+        raw_days = [row.get(f"d{i}") for i in range(1, 11)]
+        days = [str(int(float(d))) for d in raw_days if d is not None and float(d) > 0]
+        
+        # Identify special execution configurations (e.g. Weekly on Wednesdays vs Custom Dates)
+        if days:
+            date_rules = f"Available Dates: {', '.join(days)}"
+        else:
+            date_rules = f"Day Condition: Only on [{any_day}]" if any_day and any_day != "ANY" else "Day Condition: Any valid business day"
+            
+        lines.append(f"  • [{freq}] Minimum Investment: ₹{min_amt} | {date_rules}")
+        
     return "\n".join(lines)
 
 
@@ -6850,6 +7002,7 @@ def get_most_bought_sold(mf_schcode: int) -> str:
         )
     return "\n".join(lines)
 
+
 @mcp.tool(description=(
     "Lists all active New Fund Offers (NFOs) available for subscription. "
     "Includes the fund's objective, minimum investment requirements, and "
@@ -6875,6 +7028,7 @@ def get_new_fund_offers() -> str:
             f"  Min: {p.get('mininvt','N/A')}"
         )
     return "\n".join(lines)
+
 
 @mcp.tool(description=(
     "Retrieves aggregate MF industry activity, including gross purchases, sales, "
@@ -6924,9 +7078,9 @@ def get_scheme_ratios(mf_schcode: int) -> str:
     )
     if not match:
         return "Risk ratio data not found for this scheme."
-    p = _pick(match, ["Scheme_Nam", "DATE", "BETA", "SD", "TREYNOR", "ALPHA", "SHARPE"])
+    p = _pick(match, ["SCHEME_NAM", "Date", "BETA", "SD", "TREYNOR", "ALPHA", "SHARPE"])
     return (
-        f"Risk Ratios — {p.get('Scheme_Nam','N/A')}  (as of {p.get('DATE','N/A')})\n"
+        f"Risk Ratios — {p.get('SCHEME_NAM','N/A')}  (as of {p.get('Date','N/A')})\n"
         f"  Beta    : {p.get('BETA','N/A')}\n"
         f"  Std Dev : {p.get('SD','N/A')}\n"
         f"  Treynor : {p.get('TREYNOR','N/A')}\n"
@@ -7042,6 +7196,7 @@ def get_amfi_master(mf_schcode: Optional[int] = None) -> str:
             f"  |  Reinvest ISIN: {p.get('reinvestmentisin','N/A')}"
         )
     return "\n".join(lines)
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -7498,3 +7653,8 @@ def get_etf_asset_allocation(isin: str) -> str:
 # ══════════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
     mcp.run()
+
+
+
+
+

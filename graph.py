@@ -1,5 +1,4 @@
-### general redundancy 
-
+# ## general redundancy 
 # """
 # graph.py — EQUIFIZ Financial AI Agent (v11.1)
 
@@ -152,6 +151,25 @@
 #     # IPO tools that DO need co_code (specific company IPO data)
 #     "get_anchor_investor":      "stock",   # AnchorInvestorDetails/{co_code}
 #     "get_basis_of":             "stock",   # BasisOfAllotment/{n}  — uses co_code variant
+#     "get_ipo_details":                  "stock",
+#     "get_ipo_subscription_status":      "stock",
+#     "get_ipo_synopsis":                 "stock",
+#     "get_ipo_timeline":                 "stock",
+#     "get_ipo_promoter_details":         "stock",
+#     "get_ipo_listing_info":             "stock",
+#     "get_ipo_objects_of_issue":         "stock",
+#     "get_ipo_anchor_investor_details":  "stock",
+#     "get_ipo_financials":               "stock",
+#     "get_ipo_product_services":         "stock",
+#     "get_ipo_strength_details":         "stock",
+#     "get_ipo_strategy_details":         "stock",
+#     "get_ipo_risk_details":             "stock",
+#     "get_ipo_industry_peers":           "stock",
+#     "get_ipo_selling_shareholders":     "stock",
+#     "get_ipo_allocation_details":       "stock",
+#     "get_ipo_prospectus":               "stock",
+#     "get_ipo_lead_managers":            "stock",
+#     "get_ipo_registrar":                "stock",
 
 #     # ── Index: requires index_code ────────────────────────────────────────────
 #     "get_market_indices":       "stock",   # Indices  (no param, but intent is index-level)
@@ -1452,7 +1470,7 @@
 #     ]
 
 
-## general redundancy fixed #################
+# general redundancy fixed #################
 
 
 """
@@ -1589,6 +1607,7 @@ _TOOL_FAMILY_HINTS: dict[str, str] = {
     "get_company_stock":        "stock",
     "get_nse_company_announcements": "stock",
     "get_bse_company_announcements": "stock",
+    "get_company_result_schedule": "stock",
     "get_delayed_stock":        "stock",
     "get_company_profile":      "stock",
     "get_company_backgroun":    "stock",
@@ -1641,6 +1660,25 @@ _TOOL_FAMILY_HINTS: dict[str, str] = {
     # IPO tools that need a specific company co_code
     "get_anchor_investor":      "stock",
     "get_basis_of":             "stock",
+    "get_ipo_details":                  "stock",
+    "get_ipo_subscription_status":      "stock",
+    "get_ipo_synopsis":                 "stock",
+    "get_ipo_timeline":                 "stock",
+    "get_ipo_promoter_details":         "stock",
+    "get_ipo_listing_info":             "stock",
+    "get_ipo_objects_of_issue":         "stock",
+    "get_ipo_anchor_investor_details":  "stock",
+    "get_ipo_financials":               "stock",
+    "get_ipo_product_services":         "stock",
+    "get_ipo_strength_details":         "stock",
+    "get_ipo_strategy_details":         "stock",
+    "get_ipo_risk_details":             "stock",
+    "get_ipo_industry_peers":           "stock",
+    "get_ipo_selling_shareholders":     "stock",
+    "get_ipo_allocation_details":       "stock",
+    "get_ipo_prospectus":               "stock",
+    "get_ipo_lead_managers":            "stock",
+    "get_ipo_registrar":                "stock",
 
     # ── Index: requires index_code ────────────────────────────────────────────
     "get_market_indices":        "stock",   # Indices endpoint; no param but stock-adjacent
@@ -3002,6 +3040,5 @@ def run_query(
         {"role": "user",      "content": user_query},
         {"role": "assistant", "content": answer},
     ]
-
 
 
