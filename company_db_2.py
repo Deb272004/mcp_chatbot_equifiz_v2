@@ -703,6 +703,18 @@
 #     scheduler.start()
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 import os
 import sys
 import time
@@ -749,9 +761,6 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ─── SQL SETUP ────────────────────────────────────────────────────────────────
-# All VARCHAR widths are set conservatively large from the start so that ALTER
-# TABLE migrations are never needed again. The DO $$ block at the end widens
-# any columns that may be too narrow on existing installations.
 
 SQL_SETUP = """
 CREATE TABLE IF NOT EXISTS companies (
@@ -839,10 +848,10 @@ CREATE TABLE IF NOT EXISTS scheme_master (
 CREATE TABLE IF NOT EXISTS etf_master (
     equity_cmotscode INTEGER      PRIMARY KEY,
     mf_cmotscode     INTEGER,
-    amcname          VARCHAR(100),
+    amcname          VARCHAR(200),
     etfname          VARCHAR(200),
     isin             VARCHAR(50),
-    etfcategory      VARCHAR(100),
+    etfcategory      VARCHAR(200),
     bselisted        INTEGER,
     nselisted        INTEGER,
     synced_at        TIMESTAMP DEFAULT NOW()
@@ -851,77 +860,68 @@ CREATE TABLE IF NOT EXISTS etf_master (
 CREATE TABLE IF NOT EXISTS ipo_master (
     co_code          INTEGER      PRIMARY KEY,
     isin             INTEGER,
-    companyshortname VARCHAR(100),
+    companyshortname VARCHAR(200),
     company_name     VARCHAR(255),
-    issue            VARCHAR(100),
-    issuetype        VARCHAR(100),
+    issue            VARCHAR(200),
+    issuetype        VARCHAR(200),
     opendate         TIMESTAMP,
     closedate        TIMESTAMP,
     type             VARCHAR(50),
-    ipotype          VARCHAR(100),
+    ipotype          VARCHAR(200),
     freshissue       INTEGER,
     mininvestment    INTEGER,
     synced_at        TIMESTAMP DEFAULT NOW()
 );
 
+-- ── bond_master: all VARCHAR columns are intentionally oversized.
+--    The API docs show Varchar(50/100) but real data routinely exceeds those
+--    limits (multi-agency credit ratings, long security descriptions, etc.).
+--    Use TEXT for any field that is unbounded in practice.
 CREATE TABLE IF NOT EXISTS bond_master (
-    code           INTEGER      PRIMARY KEY,
+    code           INTEGER       PRIMARY KEY,
     companyname    VARCHAR(500),
     bsegroup       INTEGER,
     bsecode        INTEGER,
-    bsescripname   VARCHAR(255),
+    bsescripname   VARCHAR(500),
     bselistdate    TIMESTAMP,
-    nsesymbol      VARCHAR(100),
-    nseseries      VARCHAR(100),
-    nsesecname     VARCHAR(255),
+    nsesymbol      VARCHAR(200),
+    nseseries      VARCHAR(200),
+    nsesecname     VARCHAR(500),
     nselistdate    TIMESTAMP,
-    secdesc        VARCHAR(1000),
-    totsecurities  INTEGER,
-    issprice       INTEGER,
-    fv             INTEGER,
-    paidupval      INTEGER,
-    mktlot         INTEGER,
+    secdesc        TEXT,           -- API says Varchar(500) but content can be much longer
+    totsecurities  BIGINT,
+    issprice       BIGINT,
+    fv             BIGINT,
+    paidupval      BIGINT,
+    mktlot         BIGINT,
     allotdate      TIMESTAMP,
     redeemdate     TIMESTAMP,
-    redeemamt      INTEGER,
-    redeemnote     INTEGER,
+    redeemamt      BIGINT,
+    redeemnote     BIGINT,
     isin           VARCHAR(50),
-    tenor          VARCHAR(100),
+    tenor          TEXT,           -- API says Varchar(50) but real values can exceed this
     cprate         FLOAT,
-    intfrequency   VARCHAR(100),
-    pcoption       VARCHAR(255),
-    creditrating   VARCHAR(500),
-    bondtype       VARCHAR(100),
+    intfrequency   VARCHAR(200),
+    pcoption       TEXT,           -- API says Varchar(50); real data is much longer
+    creditrating   TEXT,           -- API says Varchar(50); multi-agency strings are very long
+    bondtype       VARCHAR(200),
     synced_at      TIMESTAMP DEFAULT NOW()
 );
 
--- ── Idempotent migrations: widen columns that may be too narrow on existing
---    installations. These are no-ops when the column is already wide enough.
+-- ── Idempotent migrations for all other tables (bond_master excluded — it is
+--    always created fresh with correct types above).
 DO $$
 BEGIN
-    -- bond_master
-    ALTER TABLE bond_master ALTER COLUMN companyname  TYPE VARCHAR(500);
-    ALTER TABLE bond_master ALTER COLUMN bsescripname TYPE VARCHAR(255);
-    ALTER TABLE bond_master ALTER COLUMN nsesymbol    TYPE VARCHAR(100);
-    ALTER TABLE bond_master ALTER COLUMN nseseries    TYPE VARCHAR(100);
-    ALTER TABLE bond_master ALTER COLUMN nsesecname   TYPE VARCHAR(255);
-    ALTER TABLE bond_master ALTER COLUMN secdesc      TYPE VARCHAR(1000);
-    ALTER TABLE bond_master ALTER COLUMN tenor        TYPE VARCHAR(100);
-    ALTER TABLE bond_master ALTER COLUMN intfrequency TYPE VARCHAR(100);
-    ALTER TABLE bond_master ALTER COLUMN pcoption     TYPE VARCHAR(255);
-    ALTER TABLE bond_master ALTER COLUMN creditrating TYPE VARCHAR(500);
-    ALTER TABLE bond_master ALTER COLUMN bondtype     TYPE VARCHAR(100);
     -- ipo_master
-    ALTER TABLE ipo_master ALTER COLUMN companyshortname TYPE VARCHAR(100);
+    ALTER TABLE ipo_master ALTER COLUMN companyshortname TYPE VARCHAR(200);
     ALTER TABLE ipo_master ALTER COLUMN company_name     TYPE VARCHAR(255);
-    ALTER TABLE ipo_master ALTER COLUMN issue            TYPE VARCHAR(100);
-    ALTER TABLE ipo_master ALTER COLUMN issuetype        TYPE VARCHAR(100);
-    ALTER TABLE ipo_master ALTER COLUMN ipotype          TYPE VARCHAR(100);
+    ALTER TABLE ipo_master ALTER COLUMN issue            TYPE VARCHAR(200);
+    ALTER TABLE ipo_master ALTER COLUMN issuetype        TYPE VARCHAR(200);
+    ALTER TABLE ipo_master ALTER COLUMN ipotype          TYPE VARCHAR(200);
     -- etf_master
-    ALTER TABLE etf_master ALTER COLUMN amcname     TYPE VARCHAR(100);
-    ALTER TABLE etf_master ALTER COLUMN etfcategory TYPE VARCHAR(100);
+    ALTER TABLE etf_master ALTER COLUMN amcname     TYPE VARCHAR(200);
+    ALTER TABLE etf_master ALTER COLUMN etfcategory TYPE VARCHAR(200);
 EXCEPTION WHEN others THEN
-    -- Swallow errors (e.g. table doesn't exist yet on very first run)
     NULL;
 END $$;
 """
@@ -990,12 +990,10 @@ def to_ts(val) -> str | None:
 
 
 # ─── JOB: COMPANY MASTER ──────────────────────────────────────────────────────
-# Source  : GET /api/CompanyMaster
-# Schedule: 4× daily at 00:00, 06:00, 12:00, 18:00 IST
 
 def sync_companies(conn: psycopg2.extensions.connection) -> None:
-    job       = "company_master"
-    t0        = time.time()
+    job = "company_master"
+    t0  = time.time()
     log.info(f"[{job}] Starting sync…")
 
     cur = conn.cursor()
@@ -1067,8 +1065,6 @@ def sync_companies(conn: psycopg2.extensions.connection) -> None:
 
 
 # ─── JOB: GROUP MASTER ────────────────────────────────────────────────────────
-# Source  : GET /api/GroupMaster/{exchange}  (BSE + NSE)
-# Schedule: once daily at 23:30 IST
 
 def sync_group_master(conn: psycopg2.extensions.connection) -> None:
     job = "group_master"
@@ -1118,8 +1114,6 @@ def sync_group_master(conn: psycopg2.extensions.connection) -> None:
 
 
 # ─── JOB: FUND HOUSE ──────────────────────────────────────────────────────────
-# Source  : GET /api/Fund_House
-# Schedule: once daily at 23:00 IST
 
 def sync_fund_house(conn: psycopg2.extensions.connection) -> None:
     job = "fund_house"
@@ -1190,8 +1184,6 @@ def sync_fund_house(conn: psycopg2.extensions.connection) -> None:
 
 
 # ─── JOB: SCHEME MASTER ───────────────────────────────────────────────────────
-# Source  : GET /api/SchemeMaster/{mf_cocode}  (one call per fund house)
-# Schedule: once daily at 23:05 IST (after fund_house)
 
 def sync_scheme_master(conn: psycopg2.extensions.connection) -> None:
     job = "scheme_master"
@@ -1318,8 +1310,6 @@ def sync_scheme_master(conn: psycopg2.extensions.connection) -> None:
 
 
 # ─── JOB: ETF MASTER ──────────────────────────────────────────────────────────
-# Source  : GET /api/ETFMaster
-# Schedule: once daily at 23:35 IST
 
 def sync_etf_master(conn: psycopg2.extensions.connection) -> None:
     job = "etf_master"
@@ -1383,8 +1373,6 @@ def sync_etf_master(conn: psycopg2.extensions.connection) -> None:
 
 
 # ─── JOB: IPO MASTER ──────────────────────────────────────────────────────────
-# Source  : GET /api/ipomaster
-# Schedule: once daily at 23:30 IST
 
 def sync_ipo_master(conn: psycopg2.extensions.connection) -> None:
     job = "ipo_master"
@@ -1455,12 +1443,13 @@ def sync_ipo_master(conn: psycopg2.extensions.connection) -> None:
 
 
 # ─── JOB: BOND MASTER ─────────────────────────────────────────────────────────
-# Source  : GET /api/BondMaster
-# Schedule: once daily at 23:40 IST
-#
-# Key fix: creditrating can be "Agency1 Rating1 and Agency2 Rating2" (200+ chars),
-# pcoption can be "As per Disclosure Document" + extras, secdesc can be very long.
-# All relevant columns are now VARCHAR(255–1000) — see CREATE TABLE above.
+# The API docs list most string fields as Varchar(50) or Varchar(100), but real
+# data from the endpoint routinely exceeds those limits — particularly:
+#   creditrating  → comma-separated multi-agency strings, easily 200+ chars
+#   pcoption      → structured put/call option descriptions, 100–300+ chars
+#   tenor         → can include free-text descriptions
+#   secdesc       → long security descriptions
+# All four are mapped to TEXT in the DDL above to avoid any truncation errors.
 
 def sync_bond_master(conn: psycopg2.extensions.connection) -> None:
     job = "bond_master"
@@ -1494,7 +1483,7 @@ def sync_bond_master(conn: psycopg2.extensions.connection) -> None:
             to_str(g(r,   "nseseries",     "NSESeries",    "NseSeries")),
             to_str(g(r,   "nsesecname",    "nsesecname",   "NseSecName")),
             to_ts(g(r,    "nselistdate",   "nselistdate",  "NseListDate")),
-            to_str(g(r,   "secdesc",       "SecDesc")),
+            to_str(g(r,   "secdesc",       "SecDesc")),         # TEXT
             to_int(g(r,   "totsecurities", "totSecurities","TotSecurities")),
             to_int(g(r,   "issprice",      "IssPrice")),
             to_int(g(r,   "fv",            "FV")),
@@ -1505,11 +1494,11 @@ def sync_bond_master(conn: psycopg2.extensions.connection) -> None:
             to_int(g(r,   "redeemamt",     "RedemAmt",     "RedeemAmt")),
             to_int(g(r,   "redeemnote",    "RedemNote",    "RedeemNote")),
             to_str(g(r,   "isin",          "ISIN",         "Isin")),
-            to_str(g(r,   "tenor",         "Tenor")),
+            to_str(g(r,   "tenor",         "Tenor")),            # TEXT
             to_float(g(r, "cprate",        "CPRate")),
             to_str(g(r,   "intfrequency",  "IntFrequency")),
-            to_str(g(r,   "pcoption",      "PCOption")),
-            to_str(g(r,   "creditrating",  "CreditRating")),
+            to_str(g(r,   "pcoption",      "PCOption")),         # TEXT
+            to_str(g(r,   "creditrating",  "CreditRating")),     # TEXT
             to_str(g(r,   "bondtype",      "bondtype",     "BondType")),
             synced_at,
         ))
