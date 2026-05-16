@@ -1,16 +1,8 @@
+
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Equifiz AI — docker-compose.yml
-#
-# Services:
-#   api       — FastAPI backend (LangGraph + EQUIFIZ pipeline)
-#   postgres  — Company master database
-#   redis     — Cross-worker rate limiting (optional but recommended)
-#   ollama    — Local LLM + embedding server (uncomment if not using Groq)
-#
-# Usage:
-#   cp .env.example .env      # fill in secrets
-#   docker compose up -d      # start all services
-#   docker compose logs -f api
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
@@ -22,33 +14,41 @@ services:
       dockerfile: Dockerfile
     container_name: equifiz_api
     restart: unless-stopped
+    # runtime: nvidia
+    shm_size: '2gb'
+
     ports:
       - "8000:8000"
+
     env_file:
       - .env
+
     environment:
-      # Override DB/Redis hostnames to use Docker service names
       POSTGRES_HOST: postgres
       REDIS_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: http://ollama:11434
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+
     volumes:
-      # Persist ChromaDB vector store across restarts
       - chroma_data:/app/chroma_store
-      # Persist SQLite session DB
       - session_data:/app/data
-      # Persist logs
       - log_data:/app/logs
-      # Persist fastembed model cache (avoids re-downloading on restart)
       - fastembed_cache:/app/.fastembed_cache
-      # Optional: mount Firebase credentials JSON
-      # - ./firebase-credentials.json:/app/firebase-credentials.json:ro
+
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+
     networks:
       - equifiz_net
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -56,73 +56,114 @@ services:
       retries: 5
       start_period: 90s
 
+  # ── Company Sync — 4x daily scheduler ───────────────────────────────────────
+  sync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: equifiz_sync
+    restart: unless-stopped
+
+    command: python company_db_2.py
+
+    env_file:
+      - .env
+
+    environment:
+      POSTGRES_HOST: postgres
+
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+
+    volumes:
+      - log_data:/app/logs
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    networks:
+      - equifiz_net
+
   # ── PostgreSQL — Company master DB ───────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: equifiz_postgres
     restart: unless-stopped
+
     environment:
-      POSTGRES_DB:       ${POSTGRES_DB:-equifiz}
-      POSTGRES_USER:     ${POSTGRES_USER:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-equifiz}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Mount init SQL scripts if you have them (e.g. schema + seed data)
-      # - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
     ports:
-      - "5432:5432"   # expose for local psql access; remove in production
+      - "127.0.0.1:5432:5432"
+
     networks:
       - equifiz_net
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-equifiz}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # ── Redis — Rate limiting + optional caching ──────────────────────────────────
+  # ── Redis — Rate limiting + optional caching ─────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: equifiz_redis
     restart: unless-stopped
+
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
     volumes:
       - redis_data:/data
+
     ports:
-      - "6379:6379"   # expose for local redis-cli; remove in production
+      - "127.0.0.1:6379:6379"
+
     networks:
       - equifiz_net
+
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # ── Ollama — Local LLM + embedding server ─────────────────────────────────────
-  # Uncomment this block if you're NOT using Groq / Anthropic cloud APIs.
-  # Set LLM_PROVIDER=ollama in your .env.
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   container_name: equifiz_ollama
-  #   restart: unless-stopped
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - ollama_models:/root/.ollama
-  #   networks:
-  #     - equifiz_net
-  #   # GPU support (uncomment for NVIDIA):
-  #   # deploy:
-  #   #   resources:
-  #   #     reservations:
-  #   #       devices:
-  #   #         - driver: nvidia
-  #   #           count: 1
-  #   #           capabilities: [gpu]
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:11434/"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 5
+  # ── Ollama — Local LLM + embedding server ────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: equifiz_ollama
+    restart: unless-stopped
+    runtime: nvidia
+
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      OLLAMA_KEEP_ALIVE: -1
+      OLLAMA_NUM_PARALLEL: 2
+      OLLAMA_FLASH_ATTENTION: "true"
+      OLLAMA_CONTEXT_LENGTH: 8192
+
+    ports:
+      - "11434:11434"
+
+    volumes:
+      - ollama_models:/root/.ollama
+
+    networks:
+      - equifiz_net
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
 # ── Named volumes ─────────────────────────────────────────────────────────────
 volumes:
@@ -132,7 +173,7 @@ volumes:
   session_data:
   log_data:
   fastembed_cache:
-  # ollama_models:   # uncomment with ollama service
+  ollama_models:
 
 # ── Network ───────────────────────────────────────────────────────────────────
 networks:

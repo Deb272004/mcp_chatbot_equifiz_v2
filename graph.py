@@ -4710,18 +4710,6 @@
 ######  stock problem ipo solved ########
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 """
 graph.py — EQUIFIZ Financial AI Agent (v11.4)
 
@@ -4862,52 +4850,59 @@ _NO_DB_MCP_TYPES = frozenset({
 _TOOL_FAMILY_HINTS: dict[str, str] = {
 
     # ── Stock: requires co_code ───────────────────────────────────────────────
-    "get_company_stock":                    "stock",
+    "get_company_stock_price": "stock",
+    "get_delayed_stock_price": "stock",
     "get_nse_company_announcements":        "stock",
     "get_bse_company_announcements":        "stock",
     "get_company_result_schedule":          "stock",
-    "get_delayed_stock":                    "stock",
     "get_company_profile":                  "stock",
-    "get_company_backgroun":                "stock",
-    "get_board_of":                         "stock",
+    "get_company_background":                "stock",
+    "get_board_of_directors":                 "stock",
     "get_company_bankers":                  "stock",
-    "get_management":                       "stock",
-    "get_subsidiaries":                     "stock",
-    "get_related_party":                    "stock",
+    "get_management_biodata":                       "stock",
+    "get_subsidiaries_jvs":                     "stock",
+    "get_related_party_transactions":                    "stock",
     "get_employee_count":                   "stock",
     "get_capital_structure":                "stock",
-    "get_pledge_share":                     "stock",
-    "get_substantial":                      "stock",
+    "get_pledge_share_details":                     "stock",
+    "get_substantial_acquisitions":                      "stock",
     "get_segment_data":                     "stock",
-    "get_r_and_d":                          "stock",
+    "get_r_and_d_expenditure":                          "stock",
     "get_finished_products":                "stock",
     "get_raw_materials":                    "stock",
-    "get_chronological":                    "stock",
+    "get_chronological_history":                    "stock",
     "get_company_history":                  "stock",
+    "get_funds_holding_company":            "stock",
     # Financials
     "get_quarterly_results":                "stock",
     "get_profit_loss":                      "stock",
     "get_balance_sheet":                    "stock",
     "get_cash_flow":                        "stock",
-    "get_half_yearly":                      "stock",
-    "get_nine_months":                      "stock",
+    "get_half_yearly_results":              "stock",
+    "get_nine_months_results":              "stock",
+    "get_quarterly_trends" :                 "stock",
+    "get_shareholding_pattern":              "stock",
+    "get_major_shareholders":                "stock",
+    "get_quarterly_balance_sheet" :         "stock",
     "get_yearly_results":                   "stock",
-    "get_quarterly_balance":                "stock",
-    "get_annual_balance":                   "stock",
-    "get_ttm_growth":                       "stock",
-    "get_quarterly_revenue":                "stock",
-    "get_quarterly_ebitda":                 "stock",
-    "get_quarterly_ebit":                   "stock",
-    "get_growth_data":                      "stock",
+    "get_annual_balance_sheet":              "stock",
+    "get_half_yearly_balance_sheet":         "stock",
+    "get_ttm_growth_trends":                 "stock",
+    "get_quarterly_revenue_trends":          "stock",
+    "get_quarterly_ebitda_trends":           "stock",
+    "get_quarterly_ebit_trends":             "stock",
+    "get_growth_data_quarterly":             "stock",
+    "get_growth_data_yearly":                "stock",
     # Ratios
-    "get_key_financial":                    "stock",
+    "get_key_financial_ratios":             "stock",
     "get_daily_ratios":                     "stock",
     "get_margin_ratios":                    "stock",
     "get_valuation_ratios":                 "stock",
     "get_all_basic_ratios":                 "stock",
     "get_return_ratios":                    "stock",
     "get_growth_ratios":                    "stock",
-    "get_performance_ratio":                "stock",
+    "get_performance_ratios":                "stock",
+    "get_efficiency_ratios":                 "stock",
     "get_cashflow_ratios":                  "stock",
     "get_liquidity_ratios":                 "stock",
     "get_solvency_ratios":                  "stock",
@@ -4915,13 +4910,13 @@ _TOOL_FAMILY_HINTS: dict[str, str] = {
     "get_yearly_ratios":                    "stock",
     "get_shareholding":                     "stock",
     "get_major_sharehold":                  "stock",
+    "get_financial_stability_ratios":       "stock",
 
     # ── Company-specific IPO tools: require co_code — family = ipo_stock ─────
     # These tools need a resolved co_code but are IPO-domain, not equity-domain.
     # Keeping them separate from 'stock' prevents cross-contamination in TVS
     # filtering while still triggering co_code DB resolution.
     "get_anchor_investor":                  "ipo_stock",
-    "get_basis_of":                         "ipo_stock",
     "get_ipo_details":                      "ipo_stock",
     "get_ipo_subscription_status":          "ipo_stock",
     "get_ipo_synopsis":                     "ipo_stock",
@@ -4930,6 +4925,7 @@ _TOOL_FAMILY_HINTS: dict[str, str] = {
     "get_ipo_listing_info":                 "ipo_stock",
     "get_ipo_objects_of_issue":             "ipo_stock",
     "get_ipo_anchor_investor_details":      "ipo_stock",
+    "get_ipo_industry_peers":                "ipo_stock",
     "get_ipo_financials":                   "ipo_stock",
     "get_ipo_product_services":             "ipo_stock",
     "get_ipo_strength_details":             "ipo_stock",
@@ -4941,6 +4937,7 @@ _TOOL_FAMILY_HINTS: dict[str, str] = {
     "get_ipo_prospectus":                   "ipo_stock",
     "get_ipo_lead_managers":                "ipo_stock",
     "get_ipo_registrar":                    "ipo_stock",
+    "get_ipo_customer_details":              "ipo_stock",
 
     # ── Index: requires index_code ────────────────────────────────────────────
     "get_market_indices":                   "stock",   # no specific param but stock-adjacent
@@ -4950,18 +4947,21 @@ _TOOL_FAMILY_HINTS: dict[str, str] = {
     "get_active_performer":                 "market",
     "get_top_gainers":                      "market",
     "get_top_losers":                       "market",
-    "get_out_under":                        "market",
-    "get_52week":                           "market",
-    "get_new_highs":                        "market",
+    "get_out_under_performers":                   "market",
+    "get_52week_highs":                           "market",
+    "get_52week_lows":                      "market",
+    "get_new_highs_lows":                        "market",
     "get_sector_companies":                 "market",
+    "get_market_indices":                    "market",
 
     # ── Exchange: requires ex only ────────────────────────────────────────────
     "get_advance_decline":                  "exchange",
     "get_exchange_holidays":                "exchange",
+    
 
     # ── MF Scheme: requires mf_schcode ────────────────────────────────────────
     "get_scheme_nav":                       "mf_scheme",
-    "get_investment_detail":                "mf_scheme",
+    "get_investment_details":                "mf_scheme",
     "get_expense_ratio":                    "mf_scheme",
     "get_avg_maturity":                     "mf_scheme",
     "get_scheme_aum":                       "mf_scheme",
@@ -4974,17 +4974,20 @@ _TOOL_FAMILY_HINTS: dict[str, str] = {
     "get_asset_allocation":                 "mf_scheme",
     "get_portfolio_changes":                "mf_scheme",
     "get_mcap_allocation":                  "mf_scheme",
-    "get_most_bought":                      "mf_scheme",
+    "get_most_bought_sold":                  "mf_scheme",
     "get_scheme_ratios":                    "mf_scheme",
     "get_dividend_details":                 "mf_scheme",
     "get_bse_star_scheme":                  "mf_scheme",
     "compare_schemes":                      "mf_scheme",
     "get_whats_in_out":                     "mf_scheme",
+    "get_scheme_sip_rules":                 "mf_scheme",
+    "get_scheme_sip_details":               "mf_scheme",
 
     # ── MF AMC: requires mf_cocode ────────────────────────────────────────────
     "get_fund_categories":                  "mf_amc",
     "get_schemes_by_amc":                   "mf_amc",
     "get_fund_profile":                     "mf_amc",
+    "get_fund_managers":                     "mf_amc",
 
     # ── ETF: requires isin ────────────────────────────────────────────────────
     "get_etf_quotes":                       "etf",
@@ -4992,7 +4995,7 @@ _TOOL_FAMILY_HINTS: dict[str, str] = {
     "get_etf_fundamentals":                 "etf",
     "get_etf_about":                        "etf",
     "get_etf_equity_holdings":              "etf",
-    "get_etf_monthly_portfo":               "etf",
+    "get_etf_monthly_portfolio":               "etf",
     "get_etf_sector_allocatio":             "etf",
     "get_etf_asset_allocation":             "etf",
     "get_etf_":                             "etf",
@@ -5008,13 +5011,19 @@ _TOOL_FAMILY_HINTS: dict[str, str] = {
     "get_bond_":                            "bond",
 
     # ── IPO list: NO entity code needed ──────────────────────────────────────
-    "get_forthcoming_ipo":                  "ipo_list",
+    "get_forthcoming_ipos":                  "ipo_list",
     "get_open_ipos":                        "ipo_list",
     "get_closed_ipos":                      "ipo_list",
-    "get_new_ipo":                          "ipo_list",
-    "get_best_ipo":                         "ipo_list",
+    "get_new_ipo_listings":                          "ipo_list",
+    "get_best_ipo_performers":                         "ipo_list",
     "get_ipo_master":                       "ipo_list",
     "get_ipo_logo":                         "ipo_list",
+    "get_forthcoming_drh_filings":           "ipo_list",
+    "get_basis_of_allotment" :               "ipo_list",
+
+    # bond _ ipo
+    "get_open_bond_ipo":                      "ipo_list",
+    "get_forthcoming_bond_ipo" :               "ipo_list",
 
     # ── NFO: no entity code needed ────────────────────────────────────────────
     "get_new_fund_offer":                   "nfo",
@@ -5022,11 +5031,11 @@ _TOOL_FAMILY_HINTS: dict[str, str] = {
     # ── News: no entity code needed ───────────────────────────────────────────
     "get_corporate_news":                   "news",
     "get_mf_news":                          "news",
-    "get_mf_activities":                    "news",
+    "get_mf_market_activity":                    "news",
 
     # ── Announcement: no entity code needed ───────────────────────────────────
-    "get_bse_announcement":                 "announcement",
-    "get_nse_announcement":                 "announcement",
+    "get_bse_announcements":                 "announcement",
+    "get_nse_announcements":                 "announcement",
 
     # ── Market Info: no entity code needed ────────────────────────────────────
     "get_fund_house":                       "market_info",
@@ -5044,6 +5053,7 @@ _TOOL_FAMILY_HINTS: dict[str, str] = {
     "get_open_bond_ipo":                    "market_info",
     "get_debt_top_value":                   "market_info",
     "get_debt_top_volume":                  "market_info",
+    "et_new_fund_offers" :                 "market_info",
     "get_debt_market_watch":                "market_info",
 }
 

@@ -23,7 +23,7 @@ RUN pip install --upgrade pip wheel
 COPY requirements.txt .
 
 # Install all Python dependencies into a prefix we can copy
-RUN pip install --prefix=/install --no-cache-dir -r requirements.txt
+RUN pip install --prefix=/install --ignore-installed --no-cache-dir -r requirements.txt
 
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
@@ -37,6 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libpq5 \
         ffmpeg \
         curl \
+        libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages from builder
@@ -49,11 +50,11 @@ RUN useradd -m -u 1000 equifiz && \
     mkdir -p /app/data /app/logs /app/chroma_store /app/.fastembed_cache && \
     chown -R equifiz:equifiz /app
 
-# Copy application code
+# Copy  code
 COPY --chown=equifiz:equifiz . .
 
 # Remove any leftover .env files — secrets come from Docker environment only
-RUN rm -f .env
+# RUN rm -f .env
 
 USER equifiz
 
