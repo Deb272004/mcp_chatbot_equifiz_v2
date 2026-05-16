@@ -5225,15 +5225,6 @@ def get_ipo_details(co_code: int) -> str:
         f"*   **Max. Investment:** ₹{r.get('maxinvestment', 0):,.2f} ({int(r.get('maxlot', 1))} Lots)",
     ]
 
-    # Add discounts if applicable
-    emp_disc = r.get('employeediscount', 0)
-    if emp_disc > 0:
-        lines.append(f"*   **Employee Discount:** ₹{emp_disc} per share")
-
-    # Add Official Links
-    drhp = r.get('DRHPLINK')
-    if drhp:
-        lines.append(f"\n[Read Official DRHP/Prospectus]({drhp})")
 
     return "\n".join(lines)
 
