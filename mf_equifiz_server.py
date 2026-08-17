@@ -21,6 +21,7 @@ from typing import Optional
 import psycopg2
 import psycopg2.extras
 import requests
+from typing import Optional, Any
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 from rapidfuzz import fuzz
@@ -137,6 +138,8 @@ _mf_scheme_cache:  list[dict] = []
 _group_cache:      list[dict] = []
 _index_cache: list[dict] = []
 _etf_master_cache: list[dict] = []  
+_sector_master_cache: list[dict] = []
+
 
 def _db():
     return psycopg2.connect(**DB)
@@ -404,46 +407,130 @@ def _fuzzy_mf_scheme(query: str, mf_cocode: int | None = None,
     return [s for s, _ in scored[:limit]]
 
 
+def _compute_smart_score(target: str, candidate: str) -> float:
+    """
+    Hardened multi-tiered string comparison score.
+    """
+    target_clean = target.lower().strip()
+    candidate_clean = candidate.lower().strip()
+    
+    if target_clean == candidate_clean:
+        return 100.0
+        
+    ts_ratio = fuzz.token_sort_ratio(target_clean, candidate_clean)
+    ratio = fuzz.ratio(target_clean, candidate_clean)
+    part_ratio = fuzz.partial_ratio(target_clean, candidate_clean)
+    
+    target_words = set(target_clean.split())
+    candidate_words = set(candidate_clean.split())
+    
+    has_exact_word_match = any(word in candidate_words for word in target_words)
+    score = max(ts_ratio, ratio)
+    
+    if part_ratio > 90.0:
+        if has_exact_word_match:
+            score = max(score, part_ratio)
+        else:
+            score = max(score, part_ratio - 35.0)
+    else:
+        score = max(score, part_ratio)
+        
+    return float(score)
+
+
 def _fuzzy_group(query: str, exchange: str | None = None,
-                 limit: int = 1, threshold: int = 55) -> list[dict]:
-    scored: list[tuple[dict, int]] = []
-    q = query.strip().upper()
-    q_lower = q.lower()
-    query_acronym = "".join(w[0] for w in q.split() if w)
+                 limit: int = 1, threshold: int = 45) -> list[dict]:
+    """
+    Resolves indices/groups by mapping token alignments, exchange constraints,
+    and business sector metadata structures over vanilla string distances.
+    """
+    scored: list[tuple[dict, float]] = []
+    
+    # 1. Clean and normalize the query token structures
+    entity_upper = query.upper().strip()
+    entity_clean = re.sub(r"[^A-Za-z0-9]", "", entity_upper)
+    query_tokens = {t for t in re.split(r"[^A-Za-z0-9]", entity_upper) if len(t) > 1}
+    
+    # Early escape tracking for strict structural tokens
+    has_nse_affinity = any(k in entity_clean for k in ("NIFTY", "NSE"))
+    has_bse_affinity = any(k in entity_clean for k in ("BSE", "SENSEX"))
+    query_has_modifiers = len(query_tokens - {"NIFTY", "BSE", "NSE", "INDEX", "STOCKS"}) > 0
+
     for grp in _load_group_cache():
+        # Enforce parameter-level exchange filters if explicitly provided
         if exchange and (grp.get("exchange") or "").upper() != exchange.upper():
             continue
-        g_name    = (grp.get("group_name") or "").upper()
-        g_display = (grp.get("display_name") or "").lower()
-        if q == g_name:
-            scored.append((grp, 100))
-            continue
-        score_name = max(
-            fuzz.token_set_ratio(q_lower, g_name.lower()),
-            fuzz.ratio(q, g_name),
-            fuzz.partial_ratio(q, g_name),
+
+        # Extract internal names and display contexts
+        g_name = str(grp.get("group_name") or grp.get("group") or grp.get("groupname") or "").upper().strip()
+        g_display = str(grp.get("display_name") or grp.get("group_name") or "").upper().strip()
+        cand_clean = re.sub(r"[^A-Za-z0-9]", "", g_name)
+
+        # 2. Get baseline semantic similarity metrics
+        base_score_name = _compute_smart_score(query, g_name)
+        base_score_display = _compute_smart_score(query, g_display)
+        score = max(base_score_name, base_score_display)
+
+        # 3. Dynamic Token Expansion Matrix
+        cand_tokens = set(re.split(r"[^A-Za-z0-9]", g_name))
+        if len(cand_clean) >= 8 and "_" not in g_name:
+            # Chunk contiguous strings to match condensed symbols (e.g., CNXMIDCAP)
+            chunks = [cand_clean[i:i+3] for i in range(0, len(cand_clean), 3)]
+            cand_tokens.update(chunks)
+
+        # 4. Catch exact suffix/prefix sector segments (e.g., "MIDCAP", "BANK")
+        is_exact_sector_match = False
+        for q_tok in query_tokens:
+            if q_tok not in ("NIFTY", "BSE", "NSE", "INDEX"):
+                if g_name.endswith(f"_{q_tok}") or cand_clean.endswith(q_tok):
+                    is_exact_sector_match = True
+
+        # 5. Guard against cross-exchange index bleeding
+        row_exchange = str(grp.get("exchange") or "").upper().strip()
+        exchange_mismatch = False
+        if has_nse_affinity and row_exchange == "BSE":
+            exchange_mismatch = True
+        elif has_bse_affinity and row_exchange == "NSE":
+            exchange_mismatch = True
+
+        # 6. Check for meaningful overlapping descriptors
+        has_token_intersection = any(
+            (q_tok in cand_clean or any(q_tok in c_tok or c_tok in q_tok for c_tok in cand_tokens))
+            for q_tok in query_tokens if q_tok not in ("NIFTY", "BSE", "NSE")
         )
-        score_display = fuzz.token_set_ratio(q_lower, g_display)
-        g_acronym = "".join(w[0] for w in g_name.split() if w)
-        g_display_acronym = "".join(w[0].upper() for w in g_display.split() if w)
-        score_acronym = max(
-            fuzz.ratio(query_acronym, g_acronym),
-            fuzz.ratio(query_acronym, g_display_acronym),
-            100 if g_name.startswith(q) and len(q) >= 3 else 0,
-        )
-        final = max(score_name, score_display, score_acronym)
-        if final >= threshold:
-            scored.append((grp, final))
+
+        is_exact_root = (cand_clean in ("NIFTY", "BSE", "NSE"))
+
+        # 7. Apply Weighted Scoring Intersection Rules
+        if exchange_mismatch:
+            score = -200.0  # Completely filter out invalid cross-exchange matching
+        elif is_exact_sector_match:
+            score = max(score, 150.0)  # Strong structural override boost
+        elif is_exact_root and query_has_modifiers:
+            score -= 75.0   # Prevent query modifiers from collapsing down into a root word index
+        elif has_token_intersection:
+            score += 35.0   # Boost mutual token combinations
+
+        if score >= threshold:
+            scored.append((grp, score))
+
+    # Sort down matching fields based on the intersection metrics
     scored.sort(key=lambda x: x[1], reverse=True)
     return [g for g, _ in scored[:limit]]
 
 
 def _resolve_group(query: str, exchange: str | None = None) -> str | None:
+    """
+    Wrapper resolving queries directly to string codes using the robust matrix logic.
+    """
     results = _fuzzy_group(query, exchange=exchange, limit=1)
     if not results:
-        logger.warning("Could not resolve group from query: %r", query)
+        logger.warning("Could not resolve group code from query matrix: %r", query)
         return None
-    return results[0]["group_name"]
+    
+    # Return the foundational group reference name
+    return results[0].get("group_name") or results[0].get("group")
+
 
 ################# etf resolve ##########################
 
@@ -505,7 +592,6 @@ def _resolve_etf_isin(query: str) -> str | None:
 #################################### index code resolve #######################################
 
 
-
 def _load_index_cache() -> list[dict]:
     global _index_cache
     if _index_cache:
@@ -521,39 +607,140 @@ def _load_index_cache() -> list[dict]:
     return _index_cache
 
 
+# ── Shared Mathematical Matrix Core ──────────────────────────────────────────
+
+# def _compute_smart_score(target: str, candidate: str) -> float:
+#     """
+#     Unified multi-tiered fuzzy string scoring matrix.
+#     Balances token distribution ratios against structural text fragments.
+#     """
+#     target_clean = target.lower().strip()
+#     candidate_clean = candidate.lower().strip()
+    
+#     if target_clean == candidate_clean:
+#         return 100.0
+        
+#     ts_ratio = fuzz.token_sort_ratio(target_clean, candidate_clean)
+#     ratio = fuzz.ratio(target_clean, candidate_clean)
+#     part_ratio = fuzz.partial_ratio(target_clean, candidate_clean)
+    
+#     target_words = set(target_clean.split())
+#     candidate_words = set(candidate_clean.split())
+    
+#     has_exact_word_match = any(word in candidate_words for word in target_words)
+#     score = max(ts_ratio, ratio)
+    
+#     if part_ratio > 90.0:
+#         if has_exact_word_match:
+#             score = max(score, part_ratio)
+#         else:
+#             score = max(score, part_ratio - 35.0)
+#     else:
+#         score = max(score, part_ratio)
+        
+#     return float(score)
+
+
+# ── Hardened Matrix Index Resolution ──────────────────────────────────────────
+
 def _fuzzy_index(
     query: str,
     limit: int = 5,
     threshold: int = FUZZY_THRESHOLD,
 ) -> list[dict]:
-    q       = query.strip()
-    q_lower = q.lower()
-    scored: list[tuple[dict, int]] = []
+    """
+    Advanced multi-layered token resolution engine for trading indices.
+    Intercepts generic token bleeding via cross-token inspections, token slicing,
+    and structural modifier weight equations.
+    """
+    scored: list[tuple[dict, float]] = []
+    
+    # Standardize string mutations and unpack token segments
+    entity_upper = query.upper().strip()
+    entity_clean = re.sub(r"[^A-Za-z0-9]", "", entity_upper)
+    query_tokens = {t for t in re.split(r"[^A-Za-z0-9]", entity_upper) if len(t) > 1}
+    
+    # Establish structural token context indicators
+    has_nse_affinity = any(k in entity_clean for k in ("NIFTY", "NSE"))
+    has_bse_affinity = any(k in entity_clean for k in ("BSE", "SENSEX"))
+    query_has_modifiers = len(query_tokens - {"NIFTY", "BSE", "NSE", "INDEX", "STOCKS"}) > 0
 
     for idx in _load_index_cache():
-        name = (idx.get("group_name") or "").lower()
+        g_name = str(idx.get("group_name") or idx.get("group") or "").upper().strip()
+        cand_clean = re.sub(r"[^A-Za-z0-9]", "", g_name)
 
-        if q_lower == name:
-            scored.append((idx, 100))
+        if not g_name:
             continue
 
-        score = max(
-            fuzz.token_set_ratio(q_lower, name),
-            fuzz.partial_ratio(q_lower, name),
+        # Core semantic distance step
+        score = _compute_smart_score(query, g_name)
+
+        # Dynamic sub-string token expansion (Unpacks condensed blocks like CNXMIDCAP or NIFTYIT)
+        cand_tokens = set(re.split(r"[^A-Za-z0-9]", g_name))
+        if len(cand_clean) >= 8 and "_" not in g_name:
+            chunks = [cand_clean[i:i+3] for i in range(0, len(cand_clean), 3)]
+            cand_tokens.update(chunks)
+
+        # Trap exact sectoral target mutations (e.g., "MIDCAP", "INFRA", "BANK")
+        is_exact_sector_match = False
+        for q_tok in query_tokens:
+            if q_tok not in ("NIFTY", "BSE", "NSE", "INDEX"):
+                if g_name.endswith(f"_{q_tok}") or cand_clean.endswith(q_tok):
+                    is_exact_sector_match = True
+
+        # Exchange containment boundaries to block cross-leak tracking
+        # Assumes default string rules when 'exchange' column isn't inside group_master
+        exchange_mismatch = False
+        if has_nse_affinity and any(b in g_name for b in ("BSE", "SENSEX")):
+            exchange_mismatch = True
+        elif has_bse_affinity and "NIFTY" in g_name:
+            exchange_mismatch = True
+
+        # Deep intersection scan
+        has_token_intersection = any(
+            (q_tok in cand_clean or any(q_tok in c_tok or c_tok in q_tok for c_tok in cand_tokens))
+            for q_tok in query_tokens if q_tok not in ("NIFTY", "BSE", "NSE")
         )
+
+        is_exact_root = (cand_clean in ("NIFTY", "BSE", "NSE"))
+
+        # Processing matrix override weights
+        if exchange_mismatch:
+            score = -200.0  # Punish mixed exchange leaks cleanly
+        elif is_exact_sector_match:
+            score = max(score, 150.0)  # Elevate valid target extensions
+        elif is_exact_root and query_has_modifiers:
+            score -= 75.0   # Deflate basic root records when modifiers are present
+        elif has_token_intersection:
+            score += 35.0   # Boost strong descriptor overlaps
+
         if score >= threshold:
             scored.append((idx, score))
 
+    # Sort matching dictionaries down by weight score
     scored.sort(key=lambda x: x[1], reverse=True)
     return [i for i, _ in scored[:limit]]
 
 
 def _resolve_index_code(query: str) -> int | None:
+    """
+    Production entry point to determine and verify a unique integer index code.
+    """
     results = _fuzzy_index(query, limit=1)
     if not results:
-        logger.warning("Could not resolve index code from query: %r", query)
+        logger.warning("Matrix Resolution Failure — No structural index code found for: %r", query)
         return None
-    return results[0]["indexcode"]
+    
+    raw_code = results[0].get("indexcode") or results[0].get("index_code")
+    if raw_code is None:
+        return None
+
+    try:
+        # Convert floating strings or integers safely
+        return int(float(raw_code))
+    except (ValueError, TypeError) as e:
+        logger.error("Failed structural casting of index code %r: %s", raw_code, e)
+        return None
 
 
 
@@ -788,13 +975,92 @@ EP = {
     "get_debt_eod_prices_scripwise":f"{BASE_URL}/Debt-EODPrices-ScripWise/{{ex}}/{{bond_code}}",
     "get_debt_top_value":f"{BASE_URL}/Debt-Top-Value/{{ex}}/{{record_count}}",
     "get_debt_top_volume" : f"{BASE_URL}/Debt-Top-Volume/{{ex}}/{{record_count}}",
-    "get_debt_market_watch" : f"{BASE_URL}/Debt-Market-Watch/{{ex}}/{{record_count}}"
+    "get_debt_market_watch" : f"{BASE_URL}/Debt-Market-Watch/{{ex}}/{{record_count}}",
+    "index_constituents": f"{BASE_URL}/IndexWiseComp/{{index_code}}"
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
 mcp = FastMCP("Equifiz Unified Market Server")
 # ══════════════════════════════════════════════════════════════════════════════
 
+#############
+## sector resolver
+################
+
+
+def _load_sector_master_cache() -> list[dict]:
+    """
+    Loads distinct sector codes and names from the companies table into memory.
+    """
+    global _sector_master_cache
+    if _sector_master_cache:
+        return _sector_master_cache
+    try:
+        conn = _db()  # Utilizing your existing connection manager
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Querying distinct sectors to keep the lookup cache footprint lightweight
+            cur.execute(
+                "SELECT DISTINCT sectorcode, sectorname "
+                "FROM companies "
+                "WHERE sectorcode IS NOT NULL AND sectorname IS NOT NULL"
+            )
+            _sector_master_cache = [dict(r) for r in cur.fetchall()]
+        conn.close()
+    except Exception as e:
+        logger.error("Sector master cache load failed: %s", e)
+    return _sector_master_cache
+
+
+def _fuzzy_sector(
+    query: str,
+    limit: int = 5,
+    threshold: int = FUZZY_THRESHOLD,
+) -> list[dict]:
+    """
+    Performs token-set and partial fuzzy score evaluation against cached sectors.
+    """
+    q = query.strip()
+    q_lower = q.lower()
+    q_upper = q.upper()
+    scored: list[tuple[dict, float]] = []
+
+    for sector in _load_sector_master_cache():
+        # Handle cases where sectorcode might be returned as an int or string representation
+        sec_code = str(sector.get("sectorcode") or "").upper().strip()
+        sec_name = str(sector.get("sectorname") or "").lower().strip()
+
+        # Direct exact match on numeric token or raw code string short-circuits to maximum score
+        if q_upper == sec_code:
+            scored.append((sector, 100.0))
+            continue
+
+        # Evaluate similarity indices matching your ETF workflow profile
+        score_name = max(
+            fuzz.token_set_ratio(q_lower, sec_name),
+            fuzz.partial_ratio(q_lower, sec_name),
+        )
+        score_code = fuzz.ratio(q_upper, sec_code)
+
+        final = max(score_name, score_code)
+        
+        # Hard cap-tier filter handling for standard sector designations (e.g., Auto vs FMCG)
+        if final >= threshold:
+            scored.append((sector, float(final)))
+
+    # Sort results sequentially matching descending order configurations
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return [s for s, _ in scored[:limit]]
+
+
+def _resolve_sector_code(query: str) -> Any | None:
+    """
+    Resolves a specific query string down to its target database sector code identifier.
+    """
+    results = _fuzzy_sector(query, limit=1)
+    if not results:
+        logger.warning("Could not resolve sector_code from query: %r", query)
+        return None
+    return results[0]["sectorcode"]
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SECTION 1 — STOCK RESOLVERS
@@ -858,7 +1124,6 @@ def search_companies(query: str, limit: int = 5) -> str:
 # ═══════════════════════════════════════════════════════════════════════════════
 # SECTION 2 — STOCK PRICE & MARKET TOOLS
 # ═══════════════════════════════════════════════════════════════════════════════
-
 @mcp.tool(description=(
     "Get current stock price and trading data: LTP (Last Traded Price), open, high, low, "
     "previous close, volume, and 52-week high/low. "
@@ -875,8 +1140,7 @@ def get_company_stock_price(co_code: int, exchange: str = "NSE") -> str:
     except ValueError as e:
         return str(e)
         
-    # Endpoint derived from your image: GetQuotes/{co_code}/{exchange}
-    url = EP["company_quotes"].format(co_code=co_code,ex=ex)
+    url = EP["company_quotes"].format(co_code=co_code, ex=ex)
     data, err = _get(url, f"StockPrice[{val}/{ex}]")
     
     if err:
@@ -888,20 +1152,32 @@ def get_company_stock_price(co_code: int, exchange: str = "NSE") -> str:
     
     r = rows[0]
     
-    # Updated mapping to match the actual API return keys (case-sensitive)
+    # Helper to pull keys regardless of BSE/NSE casing discrepancies
+    def get_any_case(row: dict, *keys: str, default=0.0):
+        for key in keys:
+            # Check for direct match
+            if key in row:
+                return row[key]
+            # Fallback: case-insensitive check
+            for k, v in row.items():
+                if k.lower() == key.lower():
+                    return v
+        return default
+
+    # Extract metrics using the case-agnostic helper
     metrics = {
-        "Company": r.get("CompLname", "N/A"),
-        "LTP": r.get("price", 0.0),            # API returns 'price'
-        "Open": r.get("Open_Price", 0.0),      # API returns 'Open_Price'
-        "High": r.get("High_Price", 0.0),      # API returns 'High_Price'
-        "Low": r.get("Low_Price", 0.0),        # API returns 'Low_Price'
-        "Prev Close": r.get("OldPrice", 0.0),   # API returns 'OldPrice'
-        "Change": r.get("Pricediff", 0.0),     # API returns 'Pricediff'
-        "Pct Change": r.get("change", 0.0),    # API returns 'change'
-        "Volume": r.get("Volume", 0),
-        "52W High": r.get("HI_52_WK", 0.0),
-        "52W Low": r.get("LO_52_WK", 0.0),
-        "Last Update": r.get("Upd_Time", "N/A")
+        "Company": get_any_case(r, "CompLname", default="N/A"),
+        "LTP": get_any_case(r, "price", "Price"),
+        "Open": get_any_case(r, "Open_Price", "open_Price"),
+        "High": get_any_case(r, "High_Price"),
+        "Low": get_any_case(r, "Low_Price"),
+        "Prev Close": get_any_case(r, "OldPrice", "Oldprice"),
+        "Change": get_any_case(r, "Pricediff", "PriceDiff"),
+        "Pct Change": get_any_case(r, "change"),
+        "Volume": int(get_any_case(r, "Volume", default=0)),
+        "52W High": get_any_case(r, "HI_52_WK"),
+        "52W Low": get_any_case(r, "LO_52_WK"),
+        "Last Update": get_any_case(r, "Upd_Time", default="N/A")
     }
 
     # Format the response for the LLM
@@ -912,104 +1188,85 @@ def get_company_stock_price(co_code: int, exchange: str = "NSE") -> str:
         if label == "Company":
             continue
             
-        if isinstance(value, (int, float)) and label != "Volume":
-            formatted_val = f"₹{value:,.2f}"
-        elif label == "Volume":
-            formatted_val = f"{int(value):,}"
-        else:
+        if label == "Volume":
+            formatted_val = f"{value:,}"
+        elif label == "Last Update":
             formatted_val = str(value)
+        else:
+            # Handles all float prices/changes safely
+            formatted_val = f"₹{float(value):,.2f}"
             
         lines.append(f"* **{label}:** {formatted_val}")
 
     return "\n".join(lines)
 
-@mcp.tool(description=(
-    "Retrieves current (during market hours) stock prices for NSE/BSE. "
-    "Includes current price, open, high, low, and volume. "
-    "Use this for real-time price checks during trading hours. "
-    "REQUIRES co_code — call resolve_nse_symbol first. exchange: 'NSE' or 'BSE'."
-))
-def get_delayed_stock_price(co_code: int, exchange: str = "NSE") -> str:
 
-    val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
-    if err:
-        return err
-        
-    try:
-        ex = exchange.upper() if exchange.upper() in ("NSE", "BSE") else "NSE"
-    except Exception:
-        ex = "NSE"
-        
-    # Endpoint remains same as per your configuration
-    url = EP["nse_bse_current_stock_price"].format(ex=ex)
-    data, err = _get(url, f"DelayedPrice[{ex}]")
-    
-    if err or not data.get("success"):
-        return f"Error fetching delayed prices for {ex}."
-        
-    rows = data.get("data", [])
-    
-    # FILTER: Match the specific co_code from the list
-    target_row = next((r for r in rows if int(float(r.get("co_code", 0))) == val), None)
-    
-    if not target_row:
-        return f"Company code {val} not found in the current {ex} delayed price feed."
-    
-    # Mapping keys to match your actual API response
-    metrics = {
-        "Company": target_row.get("CO_NAME", "N/A"),
-        "Symbol": target_row.get("SYMBOL", "N/A"),
-        "Current Price": target_row.get("price", 0.0), # API returns 'price'
-        "Open": target_row.get("Open", 0.0),           # API returns 'Open'
-        "High": target_row.get("High", 0.0),           # API returns 'High'
-        "Low": target_row.get("Low", 0.0),             # API returns 'Low'
-        "Volume": target_row.get("Volume", 0),         # API returns 'Volume'
-        "Trade Date": target_row.get("Tr_Date", "N/A") # API returns 'Tr_Date'
-    }
 
-    # Format the response for the LLM
-    header = f"### Delayed Stock Price: {metrics['Company']} ({metrics['Symbol']}) [{ex}]"
-    lines = [header, "---"]
-    
-    for label, value in metrics.items():
-        if label in ["Company", "Symbol"]:
-            continue
-            
-        if isinstance(value, (int, float)) and label != "Volume":
-            formatted_val = f"₹{value:,.2f}"
-        elif label == "Volume":
-            # Handles cases where Volume is returned as a float (e.g., 443.0)
-            formatted_val = f"{int(float(value)):,}"
-        else:
-            formatted_val = str(value)
-            
-        lines.append(f"* **{label}:** {formatted_val}")
+# @mcp.tool(description=(
+#     "Retrieves current (during market hours) stock prices for NSE/BSE. "
+#     "Includes current price, open, high, low, and volume. "
+#     "Use this for real-time price checks during trading hours. "
+#     "REQUIRES co_code — call resolve_nse_symbol first. exchange: 'NSE' or 'BSE'."
+# ))
+# def get_delayed_stock_price(co_code: int, exchange: str = "NSE") -> str:
 
-    return "\n".join(lines)
-
-# @mcp.tool(description="Get live index values (NIFTY 50, SENSEX, BANK NIFTY, etc.) with LTP, change and % change.")
-# def get_market_indices(exchange: str = "NSE") -> str:
-#     data, err = _get(EP["indices"], "Indices")
+#     val, err = _require_int(co_code, "co_code", "resolve_nse_symbol")
 #     if err:
 #         return err
-#     records = _rows(data)
-#     filtered = []
-#     for item in records:
-#         ex_val = (item.get("EXCHANGE") or item.get("exchange") or "").upper()
-#         if exchange and ex_val not in ("", exchange.upper()):
+        
+#     try:
+#         ex = exchange.upper() if exchange.upper() in ("NSE", "BSE") else "NSE"
+#     except Exception:
+#         ex = "NSE"
+        
+#     # Endpoint remains same as per your configuration
+#     url = EP["nse_bse_current_stock_price"].format(ex=ex)
+#     data, err = _get(url, f"DelayedPrice[{ex}]")
+    
+#     if err or not data.get("success"):
+#         return f"Error fetching delayed prices for {ex}."
+        
+#     rows = data.get("data", [])
+    
+#     # FILTER: Match the specific co_code from the list
+#     target_row = next((r for r in rows if int(float(r.get("co_code", 0))) == val), None)
+    
+#     if not target_row:
+#         return f"Company code {val} not found in the current {ex} delayed price feed."
+    
+#     # Mapping keys to match your actual API response
+#     metrics = {
+#         "Company": target_row.get("CO_NAME", "N/A"),
+#         "Symbol": target_row.get("SYMBOL", "N/A"),
+#         "Current Price": target_row.get("price", 0.0), # API returns 'price'
+#         "Open": target_row.get("Open", 0.0),           # API returns 'Open'
+#         "High": target_row.get("High", 0.0),           # API returns 'High'
+#         "Low": target_row.get("Low", 0.0),             # API returns 'Low'
+#         "Volume": target_row.get("Volume", 0),         # API returns 'Volume'
+#         "Trade Date": target_row.get("Tr_Date", "N/A") # API returns 'Tr_Date'
+#     }
+
+#     # Format the response for the LLM
+#     header = f"### Delayed Stock Price: {metrics['Company']} ({metrics['Symbol']}) [{ex}]"
+#     lines = [header, "---"]
+    
+#     for label, value in metrics.items():
+#         if label in ["Company", "Symbol"]:
 #             continue
-#         filtered.append({
-#             "symbol": item.get("SYMBOL") or item.get("symbol") or item.get("IndexName"),
-#             "ltp":    item.get("LTP")    or item.get("ltp")    or item.get("Close"),
-#             "change": item.get("CHANGE") or item.get("change") or item.get("NetChange"),
-#             "pct":    item.get("PER_CHANGE") or item.get("pchange") or item.get("PercentChange"),
-#             "open":   item.get("OPEN")   or item.get("open"),
-#             "high":   item.get("HIGH")   or item.get("high"),
-#             "low":    item.get("LOW")    or item.get("low"),
-#             "prev":   item.get("PREV_CLOSE") or item.get("prevclose") or item.get("PreviousClose"),
-#         })
-#     filtered = [{k: v for k, v in idx.items() if v is not None} for idx in filtered]
-#     return json.dumps(filtered)
+            
+#         if isinstance(value, (int, float)) and label != "Volume":
+#             formatted_val = f"₹{value:,.2f}"
+#         elif label == "Volume":
+#             # Handles cases where Volume is returned as a float (e.g., 443.0)
+#             formatted_val = f"{int(float(value)):,}"
+#         else:
+#             formatted_val = str(value)
+            
+#         lines.append(f"* **{label}:** {formatted_val}")
+
+#     return "\n".join(lines)
+
+
 @mcp.tool(description=(
     "Retrieves real-time market index data for the NSE and BSE. "
     "Use this to check the current performance of major benchmarks like NIFTY 50, SENSEX, "
@@ -8065,6 +8322,8 @@ def get_macro_economic_data(record_count: int = 7) -> str:
         lines.append(f"   * **Value:** {formatted_data} | **As Of:** {date_val}")
 
     return "\n".join(lines)
+
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":

@@ -526,6 +526,7 @@ def search_companies(
     results = company_db.fuzzy_search_company(q, limit=limit)
     return results
 
+
 @app.get("/companies/{co_code}")
 def get_company(co_code: int, user_id: str = Depends(get_current_user)):
     """Look up a company by its CMOTS co_code."""
@@ -535,60 +536,60 @@ def get_company(co_code: int, user_id: str = Depends(get_current_user)):
     return row
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# LIVE INGESTION  (background task)
-# ─────────────────────────────────────────────────────────────────────────────
-@app.post("/ingest/live")
-def trigger_live_ingest(
-    req:              IngestRequest,
-    background_tasks: BackgroundTasks,
-    user_id:          str = Depends(get_current_user),
-):
-    """
-    Trigger bulk live ingestion for a set of co_codes.
-    Runs in background; returns immediately.
-    """
-    from graph import _ingest_co_code
+# # ─────────────────────────────────────────────────────────────────────────────
+# # LIVE INGESTION  (background task)
+# # ─────────────────────────────────────────────────────────────────────────────
+# @app.post("/ingest/live")
+# def trigger_live_ingest(
+#     req:              IngestRequest,
+#     background_tasks: BackgroundTasks,
+#     user_id:          str = Depends(get_current_user),
+# ):
+#     """
+#     Trigger bulk live ingestion for a set of co_codes.
+#     Runs in background; returns immediately.
+#     """
+#     from graph import _ingest_co_code
 
-    def _run_bulk(co_codes: List[int]):
-        for cc in co_codes:
-            try:
-                ingested = _ingest_co_code(cc, force_refresh=True)
-                logger.info(f"Bulk ingest co_code={cc}: {ingested}")
-                _inc("bulk_ingested")
-            except Exception as e:
-                logger.error(f"Bulk ingest failed co_code={cc}: {e}")
+#     def _run_bulk(co_codes: List[int]):
+#         for cc in co_codes:
+#             try:
+#                 ingested = _ingest_co_code(cc, force_refresh=True)
+#                 logger.info(f"Bulk ingest co_code={cc}: {ingested}")
+#                 _inc("bulk_ingested")
+#             except Exception as e:
+#                 logger.error(f"Bulk ingest failed co_code={cc}: {e}")
 
-    co_codes = req.co_codes or []
-    background_tasks.add_task(_run_bulk, co_codes)
-    _inc("ingest_triggers")
-    logger.info(f"Live ingestion triggered by user={user_id} co_codes={co_codes}")
-    return {
-        "message":  "Live ingestion started in background.",
-        "co_codes": co_codes,
-    }
+#     co_codes = req.co_codes or []
+#     background_tasks.add_task(_run_bulk, co_codes)
+#     _inc("ingest_triggers")
+#     logger.info(f"Live ingestion triggered by user={user_id} co_codes={co_codes}")
+#     return {
+#         "message":  "Live ingestion started in background.",
+#         "co_codes": co_codes,
+#     }
 
-@app.post("/ingest/company/{co_code}")
-def ingest_single_company(
-    co_code:      int,
-    force_refresh: bool = True,
-    background_tasks: BackgroundTasks = None,
-    user_id:      str = Depends(get_current_user),
-):
-    """
-    On-demand ingestion for a single company — runs in background.
-    """
-    from graph import _ingest_co_code
+# @app.post("/ingest/company/{co_code}")
+# def ingest_single_company(
+#     co_code:      int,
+#     force_refresh: bool = True,
+#     background_tasks: BackgroundTasks = None,
+#     user_id:      str = Depends(get_current_user),
+# ):
+#     """
+#     On-demand ingestion for a single company — runs in background.
+#     """
+#     from graph import _ingest_co_code
 
-    def _run():
-        try:
-            ingested = _ingest_co_code(co_code, force_refresh=force_refresh)
-            logger.info(f"Single ingest co_code={co_code}: {ingested}")
-        except Exception as e:
-            logger.error(f"Single ingest failed co_code={co_code}: {e}")
+#     def _run():
+#         try:
+#             ingested = _ingest_co_code(co_code, force_refresh=force_refresh)
+#             logger.info(f"Single ingest co_code={co_code}: {ingested}")
+#         except Exception as e:
+#             logger.error(f"Single ingest failed co_code={co_code}: {e}")
 
-    background_tasks.add_task(_run)
-    return {
-        "message":  f"Ingestion for co_code={co_code} started in background.",
-        "co_code":  co_code,
-    }
+#     background_tasks.add_task(_run)
+#     return {
+#         "message":  f"Ingestion for co_code={co_code} started in background.",
+#         "co_code":  co_code,
+#     }
